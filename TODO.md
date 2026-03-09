@@ -43,18 +43,15 @@
 - [x] Week view inline editing with tab support (no re-render on edit)
 - [x] Accumulator persistence → deferred to Phase 3 (rounding happens at sync time)
 
-## Phase 3: Kleer sync
+## Phase 3: Kleer sync — DONE
 
 - [x] Inspect Kleer's form submission (Remix app, form-urlencoded POSTs)
 - [x] Chrome extension (popup, multi-week sync, per-week save points)
 - [x] Auto-fill Kleer from sheet data (create + update events)
 - [x] Accumulator rounding (15-min, per project+activity, at sync time)
 - [x] Sync checkpoint (locks synced dates in UI, backend rejects edits)
-- [ ] Test and iterate on actual sync
-- [ ] After sync: move synced entries from Entries tab to a Log tab, then clear Entries
-  - Keeps loading times fast as data grows
-  - Log tab is append-only archive, never read by the app
-  - Only the app's backend touches Entries; Log is just for history
+- [x] Archive synced entries to Log tab (append-only, keeps Entries small)
+- [x] Checkpoint only advances to last date with actual sync actions
 
 ## Phase 4: Quality
 
