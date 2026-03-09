@@ -2,16 +2,18 @@ const APPS_SCRIPT_URL = 'https://script.google.com/macros/s/AKfycbzN_N87CFV22ZVy
 const KLEER_BASE = 'https://my.kleer.se/web2/time-reporting';
 const KLEER_DATA_WEEK = 'routes/_secure._app+/time-reporting+/week.($year).($weekNumber)';
 const KLEER_DATA_DAY = 'routes/_secure._app+/time-reporting+/day.($year).($month).($day)';
-const KLEER_DATA_LAYOUT = 'routes/_secure._app+/time-reporting+/_layout';
+const KLEER_DATA_LAYOUT = 'routes/_secure._app+/_layout';
 const API_TOKEN = 'scg-kleer-sync-2026';
 const DAY_NAMES = ['', 'Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat', 'Sun'];
 
 let pendingWeeks = [];
 
-document.addEventListener('DOMContentLoaded', init);
+document.addEventListener('DOMContentLoaded', function() {
+  document.getElementById('sync-btn').addEventListener('click', doSync);
+  init();
+});
 
 async function init() {
-  document.getElementById('sync-btn').addEventListener('click', doSync);
   try {
     setStatus('Loading...');
     const [checkpointResp, projects, accumulator] = await Promise.all([
@@ -88,12 +90,13 @@ async function fetchScg(action, params) {
   const url = new URL(APPS_SCRIPT_URL);
   url.searchParams.set('action', action);
   url.searchParams.set('token', API_TOKEN);
+  url.searchParams.set('_t', Date.now());
   if (params) {
     for (const [k, v] of Object.entries(params)) {
       url.searchParams.set(k, typeof v === 'object' ? JSON.stringify(v) : v);
     }
   }
-  const resp = await fetch(url.toString(), { redirect: 'follow' });
+  const resp = await fetch(url.toString(), { redirect: 'follow', credentials: 'include' });
   if (!resp.ok) throw new Error('SCG Timer API error: ' + resp.status);
   let data;
   try {
@@ -109,14 +112,20 @@ async function fetchKleerWeek(year, weekNum) {
   const url = KLEER_BASE + '/week/' + year + '/' + weekNum + '?_data=' + encodeURIComponent(KLEER_DATA_WEEK);
   const resp = await fetch(url, { credentials: 'include' });
   if (!resp.ok) throw new Error('Kleer API error: ' + resp.status + '. Are you logged in?');
-  return resp.json();
+  return parseRemixResponse(resp);
 }
 
 async function fetchKleerLayout(year, weekNum) {
   const url = KLEER_BASE + '/week/' + year + '/' + weekNum + '?_data=' + encodeURIComponent(KLEER_DATA_LAYOUT);
   const resp = await fetch(url, { credentials: 'include' });
   if (!resp.ok) throw new Error('Failed to load Kleer activity data (' + resp.status + '). Are you logged in?');
-  return resp.json();
+  return parseRemixResponse(resp);
+}
+
+async function parseRemixResponse(resp) {
+  const text = await resp.text();
+  const firstLine = text.split('\n')[0];
+  return JSON.parse(firstLine);
 }
 
 function buildActivityMeta(layout) {
@@ -282,6 +291,7 @@ async function doSync() {
 
   let totalDone = 0;
   let totalErrors = 0;
+  const totalWeeks = pendingWeeks.length;
 
   while (pendingWeeks.length > 0) {
     const { week, plan, syncableDates } = pendingWeeks[0];
@@ -331,7 +341,7 @@ async function doSync() {
 
   btn.textContent = 'Sync to Kleer';
   if (totalErrors === 0) {
-    setStatus('Synced ' + totalDone + ' change(s) across ' + pendingWeeks.length + ' week(s).', 'success');
+    setStatus('Synced ' + totalDone + ' change(s) across ' + totalWeeks + ' week(s).', 'success');
   }
 }
 

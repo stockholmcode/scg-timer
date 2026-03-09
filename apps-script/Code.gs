@@ -123,7 +123,11 @@ function getSetting(key) {
 function setSetting(key, value) {
   var ss = getOrCreateSheet();
   var sheet = ss.getSheetByName(TAB_SETTINGS);
-  if (!sheet) return;
+  if (!sheet) {
+    sheet = ss.insertSheet(TAB_SETTINGS);
+    sheet.appendRow(['key', 'value']);
+    sheet.setFrozenRows(1);
+  }
   var data = sheet.getDataRange().getValues();
   for (var i = 1; i < data.length; i++) {
     if (data[i][0] === key) {
@@ -141,7 +145,11 @@ function getSyncCheckpoint() {
 
 function setSyncCheckpoint(dateStr) {
   setSetting('sync_checkpoint_date', dateStr);
-  return { success: true };
+  var verify = getSyncCheckpoint();
+  if (verify !== dateStr) {
+    throw new Error('Failed to save checkpoint. Expected ' + dateStr + ', got ' + verify);
+  }
+  return { success: true, checkpoint: verify };
 }
 
 function getOrCreateSheet() {
