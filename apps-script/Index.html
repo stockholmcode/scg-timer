@@ -2,7 +2,7 @@
 <html lang="en">
 <head>
   <meta charset="UTF-8">
-  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
   <style>
     * { box-sizing: border-box; margin: 0; padding: 0; }
 
@@ -261,6 +261,57 @@
     .week-cell-value { color: #666; }
     .week-cell-value.has-value { color: #e0e0e0; }
     .day-names { font-size: 0.75rem; }
+
+    /* Mobile — touch class added by JS, media query as fallback */
+    @media (max-width: 600px), (pointer: coarse) {
+      body { padding: 1rem 0.5rem; }
+      .card { padding: 1rem; border-radius: 8px; }
+      h1 { font-size: 1.3rem; margin-bottom: 1rem; }
+      .nav-btn { padding: 0.5rem 0.8rem; font-size: 1rem; min-width: 2.5rem; }
+      .view-toggle button { padding: 0.6rem; font-size: 0.9rem; }
+      .entry { padding: 0.75rem; font-size: 0.9rem; gap: 0.75rem; }
+      .entry-project { font-size: 0.9rem; }
+      .entry-activity { font-size: 0.8rem; }
+      .entry-duration { font-size: 1.1rem; }
+      .play-btn { width: 2.5rem; height: 2.5rem; font-size: 1.5rem; }
+      .add-row-btn { padding: 0.8rem; font-size: 0.9rem; }
+      .modal { padding: 1.25rem; width: 95%; }
+      .modal-field select, .modal-field input { padding: 0.65rem 0.75rem; font-size: 1rem; }
+      .modal-actions button { padding: 0.75rem; font-size: 1rem; }
+      .timer-display { font-size: 2.5rem; }
+      .total-bar { font-size: 1rem; }
+      .week-table { font-size: 0.7rem; }
+      .week-table th { padding: 0.3rem 0.15rem; }
+      .week-cell-input { width: 2.8rem; font-size: 0.7rem; padding: 0.3rem 0.1rem; }
+      .week-table td.activity-label { max-width: 80px; font-size: 0.7rem; }
+      .week-table td.project-label { font-size: 0.75rem; }
+      select { font-size: 1rem; padding: 0.6rem; }
+      .error { width: 90%; font-size: 0.85rem; }
+    }
+
+    body.touch { padding: 0.5rem; zoom: 2.2; }
+    body.touch .card { padding: 0.75rem; border-radius: 8px; max-width: 100%; }
+    body.touch h1 { font-size: 1.2rem; margin-bottom: 0.75rem; }
+    body.touch .nav-btn { padding: 0.6rem 1rem; font-size: 1.1rem; min-width: 2.5rem; -webkit-tap-highlight-color: transparent; }
+    body.touch .view-toggle button { padding: 0.7rem; font-size: 1rem; -webkit-tap-highlight-color: transparent; }
+    body.touch .entry { padding: 0.85rem 0.75rem; font-size: 1rem; gap: 0.75rem; min-height: 3.5rem; -webkit-tap-highlight-color: transparent; }
+    body.touch .entry-project { font-size: 1rem; }
+    body.touch .entry-activity { font-size: 0.85rem; }
+    body.touch .entry-duration { font-size: 1.2rem; }
+    body.touch .play-btn { width: 3rem; height: 3rem; font-size: 1.6rem; -webkit-tap-highlight-color: transparent; }
+    body.touch .add-row-btn { padding: 1rem; font-size: 1rem; -webkit-tap-highlight-color: transparent; }
+    body.touch .modal { padding: 1.25rem; width: 95%; }
+    body.touch .modal-field select, body.touch .modal-field input { padding: 0.75rem; font-size: 1.1rem; }
+    body.touch .modal-actions button { padding: 0.85rem; font-size: 1.1rem; -webkit-tap-highlight-color: transparent; }
+    body.touch .timer-display { font-size: 2.5rem; }
+    body.touch .total-bar { font-size: 1rem; padding: 0.85rem 0.75rem; }
+    body.touch .week-table { font-size: 0.75rem; }
+    body.touch .week-table th { padding: 0.4rem 0.2rem; }
+    body.touch .week-cell-input { width: 3rem; font-size: 0.75rem; padding: 0.4rem 0.15rem; }
+    body.touch .week-table td.activity-label { max-width: 80px; font-size: 0.75rem; }
+    body.touch .week-table td.project-label { font-size: 0.8rem; }
+    body.touch select { font-size: 1.1rem; padding: 0.7rem; }
+    body.touch .error { width: 95%; font-size: 0.9rem; }
   </style>
 </head>
 <body>
@@ -325,6 +376,12 @@
   </div>
 
   <script>
+    // Detect touch device and add class for mobile styles
+    if ('ontouchstart' in window || navigator.maxTouchPoints > 0) {
+      document.body.classList.add('touch');
+    }
+
+
     var DAYS = ['Sun','Mon','Tue','Wed','Thu','Fri','Sat'];
     var MONTHS = ['Jan','Feb','Mar','Apr','May','Jun','Jul','Aug','Sep','Oct','Nov','Dec'];
     var projectsData = {};
@@ -549,7 +606,7 @@
 
         // Click row to edit
         div.addEventListener('click', function() {
-          if (!isRunning) openEditModal(e);
+          openEditModal(e, entryIsRunning);
         });
 
         totalSeconds += displaySeconds;
@@ -587,23 +644,21 @@
       }
     }
 
-    function openEditModal(entry) {
+    function openEditModal(entry, entryIsRunning) {
       editingRow = entry.row;
       document.getElementById('modal-title').textContent = 'Edit Entry';
-      document.getElementById('modal-delete-btn').style.display = 'block';
+      document.getElementById('modal-delete-btn').style.display = entryIsRunning ? 'none' : 'block';
       populateModalProjects();
       document.getElementById('modal-project').value = entry.project;
       onModalProjectChange();
       document.getElementById('modal-activity').value = entry.activity;
-      document.getElementById('modal-time').value = formatHM(entry.seconds);
+      var timeInput = document.getElementById('modal-time');
+      timeInput.value = formatHM(entry.seconds);
+      timeInput.disabled = !!entryIsRunning;
       document.getElementById('modal-overlay').classList.add('visible');
     }
 
     function openAddModal() {
-      if (isRunning) {
-        showError('Stop the timer before adding.');
-        return;
-      }
       editingRow = null;
       document.getElementById('modal-title').textContent = 'Add Activity';
       document.getElementById('modal-delete-btn').style.display = 'none';
@@ -620,9 +675,11 @@
         onModalProjectChange();
       }
 
-      document.getElementById('modal-time').value = '';
+      var timeInput = document.getElementById('modal-time');
+      timeInput.value = '';
+      timeInput.disabled = false;
       document.getElementById('modal-overlay').classList.add('visible');
-      setTimeout(function() { document.getElementById('modal-time').focus(); document.getElementById('modal-time').select(); }, 50);
+      setTimeout(function() { timeInput.focus(); timeInput.select(); }, 50);
     }
 
     function closeModal() {
@@ -813,10 +870,6 @@
     }
 
     function openAddModalWeek() {
-      if (isRunning) {
-        showError('Stop the timer before adding.');
-        return;
-      }
       editingRow = null;
       document.getElementById('modal-title').textContent = 'Add Activity';
       document.getElementById('modal-delete-btn').style.display = 'none';
