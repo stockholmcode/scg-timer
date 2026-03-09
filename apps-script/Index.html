@@ -1,0 +1,878 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <style>
+    * { box-sizing: border-box; margin: 0; padding: 0; }
+
+    body {
+      font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', system-ui, sans-serif;
+      background: #1a1a2e;
+      color: #e0e0e0;
+      min-height: 100vh;
+      display: flex;
+      flex-direction: column;
+      align-items: center;
+      padding: 2rem 1rem;
+    }
+
+    h1 { font-size: 1.5rem; margin-bottom: 1.5rem; color: #f5a623; }
+
+    .card {
+      background: #16213e;
+      border-radius: 12px;
+      padding: 1.5rem;
+      margin-bottom: 1rem;
+      max-width: 700px;
+      width: 100%;
+    }
+
+    .nav-bar {
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+      margin-bottom: 0.75rem;
+    }
+
+    .nav-bar h2 { font-size: 1rem; color: #f5a623; }
+
+    .nav-btn {
+      background: none;
+      border: 1px solid #333;
+      color: #e0e0e0;
+      border-radius: 4px;
+      padding: 0.25rem 0.6rem;
+      cursor: pointer;
+      font-size: 0.9rem;
+    }
+
+    .nav-btn:hover { border-color: #f5a623; color: #f5a623; }
+
+    .view-toggle {
+      display: flex;
+      gap: 0;
+      margin-bottom: 0.75rem;
+    }
+
+    .view-toggle button {
+      flex: 1;
+      padding: 0.4rem;
+      background: #1a1a2e;
+      border: 1px solid #333;
+      color: #888;
+      cursor: pointer;
+      font-size: 0.85rem;
+    }
+
+    .view-toggle button:first-child { border-radius: 6px 0 0 6px; }
+    .view-toggle button:last-child { border-radius: 0 6px 6px 0; }
+    .view-toggle button.active { background: #333; color: #f5a623; border-color: #f5a623; }
+
+    .entries-list { display: flex; flex-direction: column; gap: 0.5rem; }
+
+    .entry {
+      display: flex;
+      align-items: center;
+      padding: 0.6rem 0.75rem;
+      background: #1a1a2e;
+      border-radius: 6px;
+      font-size: 0.85rem;
+      gap: 0.5rem;
+      cursor: pointer;
+    }
+
+    .entry:hover { background: #1e2a4a; }
+    .entry.running { border-left: 3px solid #4caf50; }
+
+    .entry-info { display: flex; flex-direction: column; gap: 0.15rem; flex: 1; min-width: 0; }
+    .entry-project { color: #f5a623; font-weight: 500; }
+    .entry-activity { color: #888; }
+
+    .entry-duration {
+      font-weight: 600;
+      font-variant-numeric: tabular-nums;
+      font-size: 1rem;
+      min-width: 4rem;
+      text-align: right;
+    }
+
+    .entry-duration.running-duration { color: #4caf50; }
+
+    .play-btn {
+      background: none;
+      border: none;
+      font-size: 1.3rem;
+      cursor: pointer;
+      width: 2rem;
+      height: 2rem;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      border-radius: 50%;
+      flex-shrink: 0;
+    }
+
+    .play-btn:hover { background: rgba(255,255,255,0.1); }
+    .play-btn.play { color: #4caf50; }
+    .play-btn.stop { color: #f44336; }
+
+    /* Edit modal */
+    .modal-overlay {
+      display: none;
+      position: fixed;
+      top: 0; left: 0; right: 0; bottom: 0;
+      background: rgba(0,0,0,0.7);
+      z-index: 100;
+      justify-content: center;
+      align-items: center;
+    }
+
+    .modal-overlay.visible { display: flex; }
+
+    .modal {
+      background: #16213e;
+      border-radius: 12px;
+      padding: 1.5rem;
+      width: 90%;
+      max-width: 400px;
+    }
+
+    .modal h3 { color: #f5a623; margin-bottom: 1rem; font-size: 1rem; }
+
+    .modal-field {
+      display: flex;
+      flex-direction: column;
+      gap: 0.3rem;
+      margin-bottom: 0.75rem;
+    }
+
+    .modal-field label { color: #888; font-size: 0.8rem; }
+
+    .modal-field select,
+    .modal-field input {
+      padding: 0.5rem 0.75rem;
+      background: #1a1a2e;
+      border: 1px solid #333;
+      border-radius: 6px;
+      color: #e0e0e0;
+      font-size: 0.95rem;
+      appearance: auto;
+    }
+
+    .modal-field select:focus,
+    .modal-field input:focus { outline: none; border-color: #f5a623; }
+
+    .modal-actions {
+      display: flex;
+      gap: 0.5rem;
+      margin-top: 1rem;
+    }
+
+    .modal-actions button {
+      flex: 1;
+      padding: 0.6rem;
+      border: none;
+      border-radius: 6px;
+      cursor: pointer;
+      font-size: 0.9rem;
+      font-weight: 600;
+    }
+
+    .modal-save { background: #f5a623; color: #1a1a2e; }
+    .modal-cancel { background: #333; color: #e0e0e0; }
+    .modal-delete { background: #f44336; color: #fff; }
+
+    .add-row-btn {
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      padding: 0.6rem;
+      background: transparent;
+      border: 1px dashed #333;
+      border-radius: 6px;
+      color: #555;
+      cursor: pointer;
+      font-size: 0.85rem;
+      width: 100%;
+      margin-top: 0.5rem;
+    }
+
+    .add-row-btn:hover { border-color: #f5a623; color: #f5a623; }
+
+    .error {
+      background: #4a1a1a;
+      color: #f44336;
+      padding: 0.75rem;
+      border-radius: 6px;
+      margin-bottom: 1rem;
+      max-width: 700px;
+      width: 100%;
+      position: fixed;
+      top: 1rem;
+      left: 50%;
+      transform: translateX(-50%);
+      z-index: 200;
+    }
+
+    .no-entries { text-align: center; color: #555; padding: 1rem; }
+
+    .spinner {
+      width: 1.5rem;
+      height: 1.5rem;
+      border: 2px solid #333;
+      border-top-color: #f5a623;
+      border-radius: 50%;
+      animation: spin 0.6s linear infinite;
+      margin: 0 auto;
+    }
+
+    @keyframes spin { to { transform: rotate(360deg); } }
+
+    .total-bar {
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+      padding: 0.75rem;
+      margin-top: 0.75rem;
+      border-top: 1px solid #333;
+      font-size: 0.95rem;
+    }
+
+    .total-bar span:last-child {
+      font-weight: 600;
+      color: #f5a623;
+      font-variant-numeric: tabular-nums;
+    }
+
+    /* Week view */
+    .week-table { width: 100%; border-collapse: collapse; font-size: 0.8rem; }
+    .week-table th { padding: 0.4rem 0.3rem; color: #f5a623; font-weight: 500; text-align: center; border-bottom: 1px solid #333; }
+    .week-table th.clickable-day { cursor: pointer; }
+    .week-table th.clickable-day:hover { color: #fff; }
+    .week-table th.today { color: #4caf50; }
+    .week-table td { padding: 0.3rem; text-align: center; font-variant-numeric: tabular-nums; }
+    .week-table td.activity-label { text-align: left; padding-left: 0.5rem; color: #888; max-width: 150px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+    .week-table td.project-label { text-align: left; padding-left: 0.5rem; padding-top: 0.6rem; color: #f5a623; font-weight: 500; }
+    .week-table tr.total-row td { border-top: 1px solid #333; font-weight: 600; color: #f5a623; padding-top: 0.5rem; }
+    .week-cell-input { width: 3.5rem; text-align: center; padding: 0.2rem; background: transparent; border: 1px solid transparent; border-radius: 3px; color: #e0e0e0; font-size: 0.8rem; font-variant-numeric: tabular-nums; font-family: inherit; }
+    .week-cell-input:hover { border-color: #444; }
+    .week-cell-input:focus { outline: none; border-color: #f5a623; background: #1a1a2e; }
+    .week-cell-value { color: #666; }
+    .week-cell-value.has-value { color: #e0e0e0; }
+    .day-names { font-size: 0.75rem; }
+  </style>
+</head>
+<body>
+
+  <h1>SCG Timer</h1>
+  <div id="error" class="error" style="display:none;"></div>
+
+  <div class="card">
+    <div class="view-toggle">
+      <button id="view-day-btn" class="active" onclick="switchView('day')">Day</button>
+      <button id="view-week-btn" onclick="switchView('week')">Week</button>
+    </div>
+
+    <div id="day-view">
+      <div class="nav-bar">
+        <button class="nav-btn" onclick="navDay(-1)">&larr;</button>
+        <button class="nav-btn" id="today-btn-day" onclick="goToday()" style="display:none;">Today</button>
+        <h2 id="day-label"></h2>
+        <button class="nav-btn" onclick="navDay(1)">&rarr;</button>
+      </div>
+      <div id="entries-list" class="entries-list"></div>
+      <button class="add-row-btn" onclick="openAddModal()">+ Add activity</button>
+      <div id="total-bar" class="total-bar" style="display:none;">
+        <span>Total</span>
+        <span id="total-value"></span>
+      </div>
+    </div>
+
+    <div id="week-view" style="display:none;">
+      <div class="nav-bar">
+        <button class="nav-btn" onclick="navWeek(-1)">&larr;</button>
+        <button class="nav-btn" id="today-btn-week" onclick="goToday()" style="display:none;">Today</button>
+        <h2 id="week-label"></h2>
+        <button class="nav-btn" onclick="navWeek(1)">&rarr;</button>
+      </div>
+      <div id="week-content"></div>
+    </div>
+  </div>
+
+  <!-- Edit/Add modal -->
+  <div id="modal-overlay" class="modal-overlay" onmousedown="this._mouseDownTarget=event.target" onclick="if(event.target===this&&this._mouseDownTarget===this)closeModal()">
+    <div class="modal">
+      <h3 id="modal-title">Edit Entry</h3>
+      <div class="modal-field">
+        <label>Project</label>
+        <select id="modal-project" onchange="onModalProjectChange()"></select>
+      </div>
+      <div class="modal-field">
+        <label>Activity</label>
+        <select id="modal-activity"></select>
+      </div>
+      <div class="modal-field">
+        <label>Time (h:mm)</label>
+        <input type="text" id="modal-time" placeholder="0:00" onkeydown="if(event.key==='Enter'){event.preventDefault();document.querySelector('.modal-save').click();}">
+      </div>
+      <div class="modal-actions">
+        <button class="modal-cancel" onclick="closeModal()">Cancel</button>
+        <button id="modal-delete-btn" class="modal-delete" onclick="onModalDelete()">Delete</button>
+        <button class="modal-save" onclick="onModalSave()">Save</button>
+      </div>
+    </div>
+  </div>
+
+  <script>
+    var DAYS = ['Sun','Mon','Tue','Wed','Thu','Fri','Sat'];
+    var MONTHS = ['Jan','Feb','Mar','Apr','May','Jun','Jul','Aug','Sep','Oct','Nov','Dec'];
+    var projectsData = {};
+    var timerInterval = null;
+    var isRunning = false;
+    var activeInfo = null; // { project, activity, start_time }
+    var currentView = 'day';
+    var viewDate = new Date();
+    var currentEntries = [];
+    var editingRow = null; // null = adding new
+
+    function showError(msg) {
+      var el = document.getElementById('error');
+      el.textContent = msg;
+      el.style.display = 'block';
+      setTimeout(function() { el.style.display = 'none'; }, 5000);
+    }
+
+    function escapeHtml(str) {
+      var div = document.createElement('div');
+      div.appendChild(document.createTextNode(str));
+      return div.innerHTML;
+    }
+
+    function formatHM(seconds) {
+      var h = Math.floor(seconds / 3600);
+      var m = Math.floor((seconds % 3600) / 60);
+      return h + ':' + ('0' + m).slice(-2);
+    }
+
+    function formatHMS(seconds) {
+      var h = Math.floor(seconds / 3600);
+      var m = Math.floor((seconds % 3600) / 60);
+      var s = seconds % 60;
+      return h + ':' + ('0' + m).slice(-2) + ':' + ('0' + s).slice(-2);
+    }
+
+    function parseHM(str) {
+      str = str.trim();
+      if (!str) return 0;
+      if (str.indexOf(':') !== -1) {
+        var parts = str.split(':');
+        if (parts.length === 2) return (parseInt(parts[0])||0)*3600 + (parseInt(parts[1])||0)*60;
+        if (parts.length === 3) return (parseInt(parts[0])||0)*3600 + (parseInt(parts[1])||0)*60 + (parseInt(parts[2])||0);
+        return null;
+      }
+      var num = parseFloat(str);
+      if (isNaN(num)) return null;
+      return Math.round(num * 3600);
+    }
+
+    function fmtDate(d) {
+      return d.getFullYear() + '-' + ('0'+(d.getMonth()+1)).slice(-2) + '-' + ('0'+d.getDate()).slice(-2);
+    }
+
+    function isToday(d) { return fmtDate(d) === fmtDate(new Date()); }
+
+    function dayLabel(d) {
+      if (isToday(d)) return 'Today';
+      return DAYS[d.getDay()] + ' ' + d.getDate() + ' ' + MONTHS[d.getMonth()];
+    }
+
+    function populateProjectSelect() {
+      // For main cache only
+    }
+
+    // --- Play/Stop per row ---
+
+    function onPlayStop(project, activity) {
+      if (isRunning && activeInfo && activeInfo.project === project && activeInfo.activity === activity) {
+        // Stop this one
+        google.script.run
+          .withSuccessHandler(function(entries) {
+            isRunning = false;
+            activeInfo = null;
+            if (timerInterval) clearInterval(timerInterval);
+            timerInterval = null;
+            currentEntries = entries;
+            renderDayEntries(entries);
+          })
+          .withFailureHandler(function(err) { showError(err.message); })
+          .stopTimer();
+      } else if (isRunning) {
+        // Stop current, then start this one
+        google.script.run
+          .withSuccessHandler(function(entries) {
+            isRunning = false;
+            activeInfo = null;
+            if (timerInterval) clearInterval(timerInterval);
+            timerInterval = null;
+            currentEntries = entries;
+            // Now start the new one
+            google.script.run
+              .withSuccessHandler(function(result) {
+                isRunning = true;
+                activeInfo = result;
+                timerInterval = setInterval(function() { renderDayEntries(currentEntries); }, 1000);
+                loadDay();
+              })
+              .withFailureHandler(function(err) { showError(err.message); })
+              .startTimer(project, activity);
+          })
+          .withFailureHandler(function(err) { showError(err.message); })
+          .stopTimer();
+      } else {
+        // Start
+        google.script.run
+          .withSuccessHandler(function(result) {
+            isRunning = true;
+            activeInfo = result;
+            timerInterval = setInterval(function() { renderDayEntries(currentEntries); }, 1000);
+            renderDayEntries(currentEntries);
+          })
+          .withFailureHandler(function(err) { showError(err.message); })
+          .startTimer(project, activity);
+      }
+    }
+
+    // --- Day view ---
+
+    function goToDay(dateStr) {
+      viewDate = new Date(dateStr + 'T12:00:00');
+      switchView('day');
+    }
+
+    function goToday() {
+      viewDate = new Date();
+      if (currentView === 'day') loadDay();
+      else loadWeek();
+    }
+
+    function updateTodayButtons() {
+      var onToday = isToday(viewDate);
+      document.getElementById('today-btn-day').style.display = onToday ? 'none' : 'inline-block';
+      var monday = getMonday(viewDate);
+      var thisMonday = getMonday(new Date());
+      var onThisWeek = fmtDate(monday) === fmtDate(thisMonday);
+      document.getElementById('today-btn-week').style.display = onThisWeek ? 'none' : 'inline-block';
+    }
+
+    function navDay(offset) {
+      viewDate.setDate(viewDate.getDate() + offset);
+      loadDay();
+    }
+
+    function showLoading(containerId) {
+      document.getElementById(containerId).innerHTML = '<div class="no-entries"><div class="spinner"></div></div>';
+    }
+
+    function loadDay() {
+      document.getElementById('day-label').textContent = dayLabel(viewDate);
+      document.getElementById('total-bar').style.display = 'none';
+      updateTodayButtons();
+      showLoading('entries-list');
+      google.script.run
+        .withSuccessHandler(function(entries) {
+          currentEntries = entries;
+          renderDayEntries(entries);
+        })
+        .withFailureHandler(function(err) { showError(err.message); })
+        .getEntries(fmtDate(viewDate));
+    }
+
+    function renderDayEntries(entries) {
+      currentEntries = entries;
+      document.getElementById('day-label').textContent = dayLabel(viewDate);
+      var list = document.getElementById('entries-list');
+      var totalBar = document.getElementById('total-bar');
+
+      if (!entries || entries.length === 0) {
+        list.innerHTML = '<div class="no-entries">No entries</div>';
+        totalBar.style.display = 'none';
+        return;
+      }
+
+      list.innerHTML = '';
+      var totalSeconds = 0;
+
+      entries.forEach(function(e) {
+        var div = document.createElement('div');
+        div.className = 'entry';
+
+        var entryIsRunning = isRunning && activeInfo &&
+          activeInfo.project === e.project && activeInfo.activity === e.activity &&
+          isToday(viewDate);
+
+        if (entryIsRunning) div.classList.add('running');
+
+        // Play/stop button
+        var btn = document.createElement('button');
+        btn.className = 'play-btn ' + (entryIsRunning ? 'stop' : 'play');
+        btn.innerHTML = entryIsRunning ? '&#9632;' : '&#9654;';
+        btn.title = entryIsRunning ? 'Stop' : 'Start';
+        btn.addEventListener('click', (function(p, a) {
+          return function(ev) { ev.stopPropagation(); onPlayStop(p, a); };
+        })(e.project, e.activity));
+
+        // Only show play/stop on today
+        if (!isToday(viewDate)) {
+          btn.style.visibility = 'hidden';
+        }
+
+        var infoDiv = document.createElement('div');
+        infoDiv.className = 'entry-info';
+        infoDiv.innerHTML =
+          '<span class="entry-project">' + escapeHtml(e.project) + '</span>' +
+          '<span class="entry-activity">' + escapeHtml(e.activity) + '</span>';
+
+        var displaySeconds = e.seconds;
+        if (entryIsRunning) {
+          var elapsed = Math.floor((Date.now() - activeInfo.start_time) / 1000);
+          displaySeconds = e.seconds + elapsed;
+        }
+
+        var durSpan = document.createElement('span');
+        durSpan.className = 'entry-duration' + (entryIsRunning ? ' running-duration' : '');
+        durSpan.textContent = formatHM(displaySeconds);
+
+        div.appendChild(btn);
+        div.appendChild(infoDiv);
+        div.appendChild(durSpan);
+
+        // Click row to edit
+        div.addEventListener('click', function() {
+          if (!isRunning) openEditModal(e);
+        });
+
+        totalSeconds += displaySeconds;
+        list.appendChild(div);
+      });
+
+      totalBar.style.display = 'flex';
+      document.getElementById('total-value').textContent = formatHM(totalSeconds);
+    }
+
+    // --- Modal ---
+
+    function populateModalProjects() {
+      var sel = document.getElementById('modal-project');
+      sel.innerHTML = '<option value="">Project...</option>';
+      Object.keys(projectsData).sort().forEach(function(p) {
+        var opt = document.createElement('option');
+        opt.value = p;
+        opt.textContent = p;
+        sel.appendChild(opt);
+      });
+    }
+
+    function onModalProjectChange() {
+      var project = document.getElementById('modal-project').value;
+      var actSel = document.getElementById('modal-activity');
+      actSel.innerHTML = '<option value="">Activity...</option>';
+      if (project && projectsData[project]) {
+        projectsData[project].forEach(function(a) {
+          var opt = document.createElement('option');
+          opt.value = a;
+          opt.textContent = a;
+          actSel.appendChild(opt);
+        });
+      }
+    }
+
+    function openEditModal(entry) {
+      editingRow = entry.row;
+      document.getElementById('modal-title').textContent = 'Edit Entry';
+      document.getElementById('modal-delete-btn').style.display = 'block';
+      populateModalProjects();
+      document.getElementById('modal-project').value = entry.project;
+      onModalProjectChange();
+      document.getElementById('modal-activity').value = entry.activity;
+      document.getElementById('modal-time').value = formatHM(entry.seconds);
+      document.getElementById('modal-overlay').classList.add('visible');
+    }
+
+    function openAddModal() {
+      if (isRunning) {
+        showError('Stop the timer before adding.');
+        return;
+      }
+      editingRow = null;
+      document.getElementById('modal-title').textContent = 'Add Activity';
+      document.getElementById('modal-delete-btn').style.display = 'none';
+      populateModalProjects();
+
+      // Restore last selection
+      var last = localStorage.getItem('scg_timer_last');
+      if (last) {
+        var sel = JSON.parse(last);
+        document.getElementById('modal-project').value = sel.project;
+        onModalProjectChange();
+        document.getElementById('modal-activity').value = sel.activity;
+      } else {
+        onModalProjectChange();
+      }
+
+      document.getElementById('modal-time').value = '';
+      document.getElementById('modal-overlay').classList.add('visible');
+      setTimeout(function() { document.getElementById('modal-time').focus(); document.getElementById('modal-time').select(); }, 50);
+    }
+
+    function closeModal() {
+      document.getElementById('modal-overlay').classList.remove('visible');
+      document.querySelector('.modal-save').disabled = false;
+      editingRow = null;
+    }
+
+    function onModalSave() {
+      var project = document.getElementById('modal-project').value;
+      var activity = document.getElementById('modal-activity').value;
+      var timeVal = parseHM(document.getElementById('modal-time').value);
+
+      var saveBtn = document.querySelector('.modal-save');
+      if (saveBtn.disabled) return;
+
+      if (!project || !activity) { showError('Select project and activity.'); return; }
+      if (timeVal === null) { showError('Invalid time format.'); return; }
+
+      saveBtn.disabled = true;
+
+      localStorage.setItem('scg_timer_last', JSON.stringify({ project: project, activity: activity }));
+
+      function onSaveSuccess(entries) {
+        currentEntries = entries;
+        if (currentView === 'day') renderDayEntries(entries);
+        else loadWeek();
+        closeModal();
+      }
+
+      if (editingRow) {
+        google.script.run
+          .withSuccessHandler(onSaveSuccess)
+          .withFailureHandler(function(err) { showError(err.message); saveBtn.disabled = false; })
+          .updateEntryFull(editingRow, project, activity, timeVal);
+      } else {
+        google.script.run
+          .withSuccessHandler(onSaveSuccess)
+          .withFailureHandler(function(err) { showError(err.message); saveBtn.disabled = false; })
+          .addEntry(fmtDate(viewDate), project, activity, timeVal);
+      }
+    }
+
+    function onModalDelete() {
+      if (!editingRow) return;
+      google.script.run
+        .withSuccessHandler(function(entries) {
+          currentEntries = entries;
+          renderDayEntries(entries);
+          closeModal();
+        })
+        .withFailureHandler(function(err) { showError(err.message); })
+        .deleteEntry(editingRow);
+    }
+
+    // --- Week view ---
+
+    function getMonday(d) {
+      var dt = new Date(d);
+      var day = dt.getDay();
+      var diff = day === 0 ? -6 : 1 - day;
+      dt.setDate(dt.getDate() + diff);
+      return dt;
+    }
+
+    function navWeek(offset) {
+      viewDate.setDate(viewDate.getDate() + offset * 7);
+      loadWeek();
+    }
+
+    function loadWeek() {
+      var monday = getMonday(viewDate);
+      var sunday = new Date(monday);
+      sunday.setDate(monday.getDate() + 6);
+      document.getElementById('week-label').textContent =
+        monday.getDate() + ' ' + MONTHS[monday.getMonth()] + ' \u2013 ' +
+        sunday.getDate() + ' ' + MONTHS[sunday.getMonth()];
+
+      updateTodayButtons();
+      showLoading('week-content');
+      google.script.run
+        .withSuccessHandler(renderWeek)
+        .withFailureHandler(function(err) { showError(err.message); })
+        .getWeekEntries(fmtDate(viewDate));
+    }
+
+    function renderWeek(data) {
+      var container = document.getElementById('week-content');
+      var dates = data.dates;
+      var entries = data.entries;
+      var todayStr = fmtDate(new Date());
+
+      var activities = {};
+      var activityOrder = [];
+      entries.forEach(function(e) {
+        var key = e.project + '|||' + e.activity;
+        if (!activities[key]) {
+          activities[key] = { project: e.project, activity: e.activity, days: {} };
+          activityOrder.push(key);
+        }
+        activities[key].days[e.date] = { seconds: e.seconds, row: e.row };
+      });
+
+      if (activityOrder.length === 0) {
+        container.innerHTML = '<div class="no-entries">No entries this week</div>';
+        return;
+      }
+
+      var projects = {};
+      var projectOrder = [];
+      activityOrder.forEach(function(key) {
+        var a = activities[key];
+        if (!projects[a.project]) { projects[a.project] = []; projectOrder.push(a.project); }
+        projects[a.project].push(key);
+      });
+
+      var html = '<table class="week-table"><thead><tr><th></th>';
+      var dayTotals = [];
+      for (var d = 0; d < 7; d++) {
+        var dt = new Date(dates[d] + 'T12:00:00');
+        var cls = dates[d] === todayStr ? ' class="today clickable-day"' : ' class="clickable-day"';
+        html += '<th' + cls + ' onclick="goToDay(\'' + dates[d] + '\')">' + DAYS[dt.getDay()] + '<br><span class="day-names">' + dt.getDate() + '</span></th>';
+        dayTotals.push(0);
+      }
+      html += '<th>Total</th></tr></thead><tbody>';
+
+      projectOrder.forEach(function(proj) {
+        html += '<tr><td class="project-label" colspan="9">' + escapeHtml(proj) + '</td></tr>';
+        projects[proj].forEach(function(key) {
+          var a = activities[key];
+          var rowTotal = 0;
+          html += '<tr><td class="activity-label">' + escapeHtml(a.activity) + '</td>';
+          for (var d = 0; d < 7; d++) {
+            var dayData = a.days[dates[d]];
+            var secs = dayData ? dayData.seconds : 0;
+            rowTotal += secs;
+            dayTotals[d] += secs;
+            if (isRunning) {
+              var cls = secs > 0 ? 'week-cell-value has-value' : 'week-cell-value';
+              html += '<td><span class="' + cls + '">' + (secs > 0 ? formatHM(secs) : '') + '</span></td>';
+            } else if (dayData) {
+              html += '<td><input class="week-cell-input" value="' + (secs > 0 ? formatHM(secs) : '') + '" data-row="' + dayData.row + '" onblur="onWeekCellEdit(this)" onkeydown="if(event.key===\'Enter\'){event.preventDefault();this.blur();}" /></td>';
+            } else {
+              html += '<td><input class="week-cell-input" value="" data-date="' + dates[d] + '" data-project="' + escapeHtml(a.project) + '" data-activity="' + escapeHtml(a.activity) + '" onblur="onWeekCellAdd(this)" onkeydown="if(event.key===\'Enter\'){event.preventDefault();this.blur();}" /></td>';
+            }
+          }
+          html += '<td class="has-value">' + formatHM(rowTotal) + '</td></tr>';
+        });
+      });
+
+      var grandTotal = 0;
+      html += '<tr class="total-row"><td>Total</td>';
+      for (var d = 0; d < 7; d++) {
+        grandTotal += dayTotals[d];
+        html += '<td>' + formatHM(dayTotals[d]) + '</td>';
+      }
+      html += '<td>' + formatHM(grandTotal) + '</td></tr></tbody></table>';
+      html += '<button class="add-row-btn" onclick="openAddModalWeek()">+ Add activity</button>';
+      container.innerHTML = html;
+    }
+
+    function onWeekCellEdit(input) {
+      var val = input.value.trim();
+      var row = parseInt(input.dataset.row);
+      if (!row) return;
+      var parsed = val === '' ? 0 : parseHM(val);
+      if (parsed === null) { showError('Invalid format.'); return; }
+      google.script.run
+        .withSuccessHandler(function() { loadWeek(); })
+        .withFailureHandler(function(err) { showError(err.message); })
+        .updateEntry(row, parsed);
+    }
+
+    function onWeekCellAdd(input) {
+      var val = input.value.trim();
+      if (!val) return;
+      var parsed = parseHM(val);
+      if (parsed === null) { showError('Invalid format.'); return; }
+      if (parsed === 0) return;
+      var dateStr = input.dataset.date;
+      var project = input.dataset.project;
+      var activity = input.dataset.activity;
+      input.disabled = true;
+      google.script.run
+        .withSuccessHandler(function() { loadWeek(); })
+        .withFailureHandler(function(err) { showError(err.message); input.disabled = false; })
+        .addEntry(dateStr, project, activity, parsed);
+    }
+
+    function openAddModalWeek() {
+      if (isRunning) {
+        showError('Stop the timer before adding.');
+        return;
+      }
+      editingRow = null;
+      document.getElementById('modal-title').textContent = 'Add Activity';
+      document.getElementById('modal-delete-btn').style.display = 'none';
+      populateModalProjects();
+
+      var last = localStorage.getItem('scg_timer_last');
+      if (last) {
+        var sel = JSON.parse(last);
+        document.getElementById('modal-project').value = sel.project;
+        onModalProjectChange();
+        document.getElementById('modal-activity').value = sel.activity;
+      } else {
+        onModalProjectChange();
+      }
+
+      document.getElementById('modal-time').value = '';
+      document.getElementById('modal-overlay').classList.add('visible');
+      setTimeout(function() { document.getElementById('modal-time').focus(); }, 50);
+    }
+
+    // --- View switching ---
+
+    function switchView(view) {
+      currentView = view;
+      document.getElementById('day-view').style.display = view === 'day' ? 'block' : 'none';
+      document.getElementById('week-view').style.display = view === 'week' ? 'block' : 'none';
+      document.getElementById('view-day-btn').className = view === 'day' ? 'active' : '';
+      document.getElementById('view-week-btn').className = view === 'week' ? 'active' : '';
+      if (view === 'day') loadDay();
+      else loadWeek();
+    }
+
+    // --- Init ---
+
+    var cached = localStorage.getItem('scg_timer_projects');
+    if (cached) projectsData = JSON.parse(cached);
+
+    google.script.run
+      .withSuccessHandler(function(data) {
+        projectsData = data.projects;
+        localStorage.setItem('scg_timer_projects', JSON.stringify(projectsData));
+
+        if (data.active) {
+          isRunning = true;
+          activeInfo = data.active;
+          timerInterval = setInterval(function() { renderDayEntries(currentEntries); }, 1000);
+        }
+
+        currentEntries = data.entries;
+        renderDayEntries(data.entries);
+        document.getElementById('day-label').textContent = dayLabel(viewDate);
+      })
+      .withFailureHandler(function(err) {
+        showError('Failed to load: ' + err.message);
+      })
+      .getInitData();
+  </script>
+</body>
+</html>
