@@ -325,9 +325,17 @@ async function doSync() {
       }
       await fetchScg('updateAccumulator', { data: accEntries });
 
-      const lastDate = syncableDates[syncableDates.length - 1];
-      await fetchScg('setSyncCheckpoint', { dateStr: lastDate });
-      setStatus(weekLabel + ' done. Checkpoint: ' + lastDate);
+      var lastSyncedDate = null;
+      for (var a = plan.actions.length - 1; a >= 0; a--) {
+        if (!lastSyncedDate || plan.actions[a].date > lastSyncedDate) {
+          lastSyncedDate = plan.actions[a].date;
+        }
+      }
+      if (lastSyncedDate) {
+        await fetchScg('setSyncCheckpoint', { dateStr: lastSyncedDate });
+        await fetchScg('archiveSyncedEntries');
+      }
+      setStatus(weekLabel + ' done.' + (lastSyncedDate ? ' Checkpoint: ' + lastSyncedDate : ''));
     } catch (err) {
       console.error('Failed to save checkpoint for', weekLabel, err);
       setStatus(weekLabel + ': synced but failed to save checkpoint \u2014 ' + err.message, 'error');

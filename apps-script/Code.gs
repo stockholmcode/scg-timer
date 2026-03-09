@@ -4,6 +4,7 @@ var TAB_ACTIVE = 'Active';
 var TAB_PROJECTS = 'Projects';
 var TAB_ACCUMULATOR = 'Accumulator';
 var TAB_SETTINGS = 'Settings';
+var TAB_LOG = 'Log';
 
 var DEFAULT_PROJECTS = [
   ['4 - Discoveryplus (Peter Borg)', 'On-call, Holiday', true, 2335606, '019cb481-c032-7740-bb95-630a51ab81ec', 'Discovery Dplay Entertainment Limited', '4', true],
@@ -72,6 +73,9 @@ function handleApiRequest(params) {
         break;
       case 'setSyncCheckpoint':
         result = setSyncCheckpoint(params.dateStr);
+        break;
+      case 'archiveSyncedEntries':
+        result = archiveSyncedEntries();
         break;
       default:
         result = { error: 'Unknown action: ' + params.action };
@@ -453,6 +457,43 @@ function deleteEntry(row) {
   assertNotLocked(dateStr);
   sheet.deleteRow(row);
   return getEntries(dateStr);
+}
+
+function archiveSyncedEntries() {
+  var checkpoint = getSyncCheckpoint();
+  if (!checkpoint) return { archived: 0 };
+
+  var ss = getOrCreateSheet();
+  var entriesSheet = ss.getSheetByName(TAB_ENTRIES);
+  var data = entriesSheet.getDataRange().getValues();
+
+  var logSheet = ss.getSheetByName(TAB_LOG);
+  if (!logSheet) {
+    logSheet = ss.insertSheet(TAB_LOG);
+    logSheet.appendRow(['date', 'project', 'activity', 'seconds']);
+    logSheet.setFrozenRows(1);
+  }
+
+  var toArchive = [];
+  var rowsToDelete = [];
+  for (var i = 1; i < data.length; i++) {
+    var dateStr = toDateStr(data[i][0]);
+    if (dateStr && dateStr <= checkpoint) {
+      toArchive.push([dateStr, data[i][1], data[i][2], data[i][3] || 0]);
+      rowsToDelete.push(i + 1);
+    }
+  }
+
+  if (toArchive.length === 0) return { archived: 0 };
+
+  var logLastRow = logSheet.getLastRow();
+  logSheet.getRange(logLastRow + 1, 1, toArchive.length, 4).setValues(toArchive);
+
+  for (var i = rowsToDelete.length - 1; i >= 0; i--) {
+    entriesSheet.deleteRow(rowsToDelete[i]);
+  }
+
+  return { archived: toArchive.length };
 }
 
 function isDateLocked(dateStr) {
