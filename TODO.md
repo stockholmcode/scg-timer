@@ -20,14 +20,19 @@
 - [x] Flexible time input (1 = 1h, 1.5 = 1:30, 1:30 = 1:30)
 - [x] Last project/activity remembered in localStorage
 - [x] Project list cached in localStorage for fast load
+- [x] Day entries cached in localStorage (show cached, refresh in background)
 - [x] Single getInitData() call on load
 - [x] Loading spinner on navigation
 - [x] Duplicate entry prevention
 - [x] Double-save prevention
+- [x] Mobile support (touch detection, zoom 2.2x, larger touch targets)
+- [x] Free navigation while timer running (day/week/view toggle)
+- [x] Editable entries while timer running (except running entry's time)
+- [x] Week view editable while timer running (except running cell)
 
 ### Deployment
 
-- **Apps Script project**: Kleer Time Tracker (standalone, via clasp)
+- **Apps Script project**: SCG Timer (standalone, via clasp)
 - **Stable URL**: https://script.google.com/macros/s/AKfycbzN_N87CFV22ZVy79iPggXGq9QBbIzIC_kccx4lyFM32WcArW6v0Pzq4mJVvgGmmyfz/exec
 - **Deploy command**: `cd apps-script && clasp push --force && clasp deploy -i AKfycbzN_N87CFV22ZVy79iPggXGq9QBbIzIC_kccx4lyFM32WcArW6v0Pzq4mJVvgGmmyfz --description "description"`
 - **Google account**: peter.borg@stockholmcode.se
@@ -37,7 +42,6 @@
 - [ ] Pretty URL (GitHub Pages redirect or custom subdomain)
 - [ ] Super seed — get full project/activity list for all SCG consultants
 - [ ] Accumulator persistence for 15-min rounding across days
-- [ ] Mobile-friendly tweaks
 - [ ] Cross-device test (start on one device, stop on another)
 
 ## Phase 3: Kleer sync

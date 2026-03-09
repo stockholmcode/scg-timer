@@ -391,6 +391,9 @@
     var currentView = 'day';
     var viewDate = new Date();
     var currentEntries = [];
+    var dayLoading = false;
+    var loadingDateStr = '';
+    var dayCache = JSON.parse(localStorage.getItem('scg_timer_day_cache') || '{}');
     var editingRow = null; // null = adding new
 
     function showError(msg) {
@@ -460,6 +463,9 @@
             if (timerInterval) clearInterval(timerInterval);
             timerInterval = null;
             currentEntries = entries;
+            var todayDs = fmtDate(new Date());
+            dayCache[todayDs] = entries;
+            saveDayCache();
             renderDayEntries(entries);
           })
           .withFailureHandler(function(err) { showError(err.message); })
@@ -472,6 +478,9 @@
             activeInfo = null;
             if (timerInterval) clearInterval(timerInterval);
             timerInterval = null;
+            var todayDs = fmtDate(new Date());
+            dayCache[todayDs] = entries;
+            saveDayCache();
             currentEntries = entries;
             // Now start the new one
             google.script.run
@@ -532,20 +541,41 @@
     }
 
     function loadDay() {
+      var ds = fmtDate(viewDate);
+      loadingDateStr = ds;
       document.getElementById('day-label').textContent = dayLabel(viewDate);
       document.getElementById('total-bar').style.display = 'none';
       updateTodayButtons();
-      showLoading('entries-list');
+
+      if (dayCache[ds]) {
+        currentEntries = dayCache[ds];
+        dayLoading = false;
+        renderDayEntries(dayCache[ds]);
+      } else {
+        showLoading('entries-list');
+      }
+
+      dayLoading = true;
       google.script.run
         .withSuccessHandler(function(entries) {
-          currentEntries = entries;
-          renderDayEntries(entries);
+          dayCache[ds] = entries;
+          saveDayCache();
+          if (fmtDate(viewDate) === ds) {
+            dayLoading = false;
+            currentEntries = entries;
+            renderDayEntries(entries);
+          }
         })
-        .withFailureHandler(function(err) { showError(err.message); })
-        .getEntries(fmtDate(viewDate));
+        .withFailureHandler(function(err) { dayLoading = false; showError(err.message); })
+        .getEntries(ds);
+    }
+
+    function saveDayCache() {
+      try { localStorage.setItem('scg_timer_day_cache', JSON.stringify(dayCache)); } catch(e) {}
     }
 
     function renderDayEntries(entries) {
+      if (dayLoading) return;
       currentEntries = entries;
       document.getElementById('day-label').textContent = dayLabel(viewDate);
       var list = document.getElementById('entries-list');
@@ -705,6 +735,8 @@
 
       function onSaveSuccess(entries) {
         currentEntries = entries;
+        dayCache[fmtDate(viewDate)] = entries;
+        saveDayCache();
         if (currentView === 'day') renderDayEntries(entries);
         else loadWeek();
         closeModal();
@@ -728,6 +760,8 @@
       google.script.run
         .withSuccessHandler(function(entries) {
           currentEntries = entries;
+          dayCache[fmtDate(viewDate)] = entries;
+          saveDayCache();
           renderDayEntries(entries);
           closeModal();
         })
@@ -817,9 +851,9 @@
             var secs = dayData ? dayData.seconds : 0;
             rowTotal += secs;
             dayTotals[d] += secs;
-            if (isRunning) {
-              var cls = secs > 0 ? 'week-cell-value has-value' : 'week-cell-value';
-              html += '<td><span class="' + cls + '">' + (secs > 0 ? formatHM(secs) : '') + '</span></td>';
+            var cellIsRunning = isRunning && activeInfo && a.project === activeInfo.project && a.activity === activeInfo.activity && dates[d] === todayStr;
+            if (cellIsRunning) {
+              html += '<td><span class="week-cell-value has-value">' + (secs > 0 ? formatHM(secs) : '') + '</span></td>';
             } else if (dayData) {
               html += '<td><input class="week-cell-input" value="' + (secs > 0 ? formatHM(secs) : '') + '" data-row="' + dayData.row + '" onblur="onWeekCellEdit(this)" onkeydown="if(event.key===\'Enter\'){event.preventDefault();this.blur();}" /></td>';
             } else {

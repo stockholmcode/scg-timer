@@ -27,12 +27,14 @@ The data can then be used to report time in Kleer or any other system.
 5. **Day navigation**: Back/forward arrows, "Today" button.
 6. **Week view**: Grid with activities as rows, Mon-Sun as columns. Editable cells. Click empty cells to add. Click day header to go to day view. Row and column totals.
 7. **Project/activity management**: Managed in a Google Sheet tab — no code changes needed to add/remove. `enabled` flag controls dropdown visibility.
-8. **Cross-device access**: Works from any computer with a browser.
+8. **Cross-device access**: Works from any computer or phone with a browser.
 9. **Multi-user**: Any `@stockholmcode.se` Google account can use the tool. Each user gets their own Google Sheet auto-created on first use.
+10. **Editable while running**: All entries and navigation work while a timer is running. Only the running entry's time is locked.
+11. **Mobile support**: Touch-optimized with larger targets. Works on Android via "Add to Home screen".
 
 ### Non-Functional Requirements
 
-1. **Minimal friction**: Last project/activity remembered. Project list cached in localStorage. Single API call on page load.
+1. **Minimal friction**: Last project/activity remembered. Project list and day entries cached in localStorage. Single API call on page load. Cached data shown instantly, refreshed in background.
 2. **No infrastructure to maintain**: No servers, databases, or cloud projects beyond a Google Sheet.
 3. **Simple tech**: Plain HTML/CSS/JS served from Google Apps Script. No build step.
 4. **Data transparency**: All data visible and editable in the Google Sheet.
@@ -44,6 +46,7 @@ The data can then be used to report time in Kleer or any other system.
 - 15-minute rounding with accumulator persistence
 - Pretty URL (custom domain or GitHub Pages redirect)
 - Multiple concurrent timers
+- After Kleer sync: archive entries to Log tab to keep load times fast
 
 ## Architecture
 
