@@ -37,19 +37,28 @@
 - **Deploy command**: `cd apps-script && clasp push --force && clasp deploy -i AKfycbzN_N87CFV22ZVy79iPggXGq9QBbIzIC_kccx4lyFM32WcArW6v0Pzq4mJVvgGmmyfz --description "description"`
 - **Google account**: peter.borg@stockholmcode.se
 
-## Phase 2: Polish
+## Phase 2: Polish — DONE
 
-- [ ] Pretty URL (GitHub Pages redirect or custom subdomain)
-- [ ] Super seed — get full project/activity list for all SCG consultants
-- [ ] Accumulator persistence for 15-min rounding across days
-- [ ] Cross-device test (start on one device, stop on another)
+- [x] Week view uses day cache for instant load
+- [x] Week view inline editing with tab support (no re-render on edit)
+- [x] Accumulator persistence → deferred to Phase 3 (rounding happens at sync time)
 
 ## Phase 3: Kleer sync
 
-- [ ] Chrome extension
-- [ ] Inspect Kleer's form submission (DOM or internal API)
-- [ ] Auto-fill Kleer from sheet data
+- [x] Inspect Kleer's form submission (Remix app, form-urlencoded POSTs)
+- [x] Chrome extension (popup, multi-week sync, per-week save points)
+- [x] Auto-fill Kleer from sheet data (create + update events)
+- [x] Accumulator rounding (15-min, per project+activity, at sync time)
+- [x] Sync checkpoint (locks synced dates in UI, backend rejects edits)
+- [ ] Test and iterate on actual sync
 - [ ] After sync: move synced entries from Entries tab to a Log tab, then clear Entries
   - Keeps loading times fast as data grows
   - Log tab is append-only archive, never read by the app
   - Only the app's backend touches Entries; Log is just for history
+
+## Phase 4: Quality
+
+- [ ] Pretty URL (GitHub Pages redirect or custom subdomain)
+- [ ] Super seed — get full project/activity list for all SCG consultants
+- [ ] Cross-device test (start on one device, stop on another)
+- [ ] Testing strategy and test coverage

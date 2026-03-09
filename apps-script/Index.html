@@ -98,6 +98,8 @@
     }
 
     .entry-duration.running-duration { color: #4caf50; }
+    .entry.locked { opacity: 0.5; cursor: default; }
+    .week-cell-value.locked { opacity: 0.5; }
 
     .play-btn {
       background: none;
@@ -333,7 +335,7 @@
         <button class="nav-btn" onclick="navDay(1)">&rarr;</button>
       </div>
       <div id="entries-list" class="entries-list"></div>
-      <button class="add-row-btn" onclick="openAddModal()">+ Add activity</button>
+      <button class="add-row-btn" id="day-add-btn" onclick="openAddModal()">+ Add activity</button>
       <div id="total-bar" class="total-bar" style="display:none;">
         <span>Total</span>
         <span id="total-value"></span>
@@ -395,6 +397,11 @@
     var loadingDateStr = '';
     var dayCache = JSON.parse(localStorage.getItem('scg_timer_day_cache') || '{}');
     var editingRow = null; // null = adding new
+    var syncCheckpoint = null;
+
+    function isDateLocked(dateStr) {
+      return syncCheckpoint && dateStr <= syncCheckpoint;
+    }
 
     function showError(msg) {
       var el = document.getElementById('error');
@@ -580,10 +587,12 @@
       document.getElementById('day-label').textContent = dayLabel(viewDate);
       var list = document.getElementById('entries-list');
       var totalBar = document.getElementById('total-bar');
+      var locked = isDateLocked(fmtDate(viewDate));
 
       if (!entries || entries.length === 0) {
         list.innerHTML = '<div class="no-entries">No entries</div>';
         totalBar.style.display = 'none';
+        document.getElementById('day-add-btn').style.display = locked ? 'none' : '';
         return;
       }
 
@@ -593,14 +602,14 @@
       entries.forEach(function(e) {
         var div = document.createElement('div');
         div.className = 'entry';
+        if (locked) div.classList.add('locked');
 
-        var entryIsRunning = isRunning && activeInfo &&
+        var entryIsRunning = !locked && isRunning && activeInfo &&
           activeInfo.project === e.project && activeInfo.activity === e.activity &&
           isToday(viewDate);
 
         if (entryIsRunning) div.classList.add('running');
 
-        // Play/stop button
         var btn = document.createElement('button');
         btn.className = 'play-btn ' + (entryIsRunning ? 'stop' : 'play');
         btn.innerHTML = entryIsRunning ? '&#9632;' : '&#9654;';
@@ -609,8 +618,7 @@
           return function(ev) { ev.stopPropagation(); onPlayStop(p, a); };
         })(e.project, e.activity));
 
-        // Only show play/stop on today
-        if (!isToday(viewDate)) {
+        if (!isToday(viewDate) || locked) {
           btn.style.visibility = 'hidden';
         }
 
@@ -634,10 +642,11 @@
         div.appendChild(infoDiv);
         div.appendChild(durSpan);
 
-        // Click row to edit
-        div.addEventListener('click', function() {
-          openEditModal(e, entryIsRunning);
-        });
+        if (!locked) {
+          div.addEventListener('click', function() {
+            openEditModal(e, entryIsRunning);
+          });
+        }
 
         totalSeconds += displaySeconds;
         list.appendChild(div);
@@ -645,6 +654,7 @@
 
       totalBar.style.display = 'flex';
       document.getElementById('total-value').textContent = formatHM(totalSeconds);
+      document.getElementById('day-add-btn').style.display = locked ? 'none' : '';
     }
 
     // --- Modal ---
@@ -793,11 +803,55 @@
         sunday.getDate() + ' ' + MONTHS[sunday.getMonth()];
 
       updateTodayButtons();
-      showLoading('week-content');
+
+      var dates = [];
+      for (var d = 0; d < 7; d++) {
+        var dt = new Date(monday);
+        dt.setDate(monday.getDate() + d);
+        dates.push(fmtDate(dt));
+      }
+
+      var cachedEntries = [];
+      var hasCached = false;
+      for (var i = 0; i < dates.length; i++) {
+        var dayEntries = dayCache[dates[i]];
+        if (dayEntries) {
+          hasCached = true;
+          for (var j = 0; j < dayEntries.length; j++) {
+            var e = dayEntries[j];
+            cachedEntries.push({ row: e.row, date: dates[i], project: e.project, activity: e.activity, seconds: e.seconds });
+          }
+        }
+      }
+
+      if (hasCached) {
+        renderWeek({ dates: dates, entries: cachedEntries });
+      } else {
+        showLoading('week-content');
+      }
+
+      var weekDateStr = fmtDate(viewDate);
       google.script.run
-        .withSuccessHandler(renderWeek)
+        .withSuccessHandler(function(data) {
+          for (var i = 0; i < data.dates.length; i++) {
+            var ds = data.dates[i];
+            var dayEntries = [];
+            for (var j = 0; j < data.entries.length; j++) {
+              if (data.entries[j].date === ds) {
+                var e = data.entries[j];
+                dayEntries.push({ row: e.row, project: e.project, activity: e.activity, seconds: e.seconds });
+              }
+            }
+            dayCache[ds] = dayEntries;
+          }
+          saveDayCache();
+          if (currentView === 'week' && fmtDate(getMonday(viewDate)) === fmtDate(monday)) {
+            var isEditing = document.activeElement && document.activeElement.classList.contains('week-cell-input');
+            if (!isEditing) renderWeek(data);
+          }
+        })
         .withFailureHandler(function(err) { showError(err.message); })
-        .getWeekEntries(fmtDate(viewDate));
+        .getWeekEntries(weekDateStr);
     }
 
     function renderWeek(data) {
@@ -852,12 +906,14 @@
             rowTotal += secs;
             dayTotals[d] += secs;
             var cellIsRunning = isRunning && activeInfo && a.project === activeInfo.project && a.activity === activeInfo.activity && dates[d] === todayStr;
-            if (cellIsRunning) {
-              html += '<td><span class="week-cell-value has-value">' + (secs > 0 ? formatHM(secs) : '') + '</span></td>';
-            } else if (dayData) {
-              html += '<td><input class="week-cell-input" value="' + (secs > 0 ? formatHM(secs) : '') + '" data-row="' + dayData.row + '" onblur="onWeekCellEdit(this)" onkeydown="if(event.key===\'Enter\'){event.preventDefault();this.blur();}" /></td>';
+            var dayLocked = isDateLocked(dates[d]);
+            var displayVal = secs > 0 ? formatHM(secs) : '';
+            if (cellIsRunning || dayLocked) {
+              html += '<td><span class="week-cell-value' + (secs > 0 ? ' has-value' : '') + (dayLocked ? ' locked' : '') + '">' + displayVal + '</span></td>';
             } else {
-              html += '<td><input class="week-cell-input" value="" data-date="' + dates[d] + '" data-project="' + escapeHtml(a.project) + '" data-activity="' + escapeHtml(a.activity) + '" onblur="onWeekCellAdd(this)" onkeydown="if(event.key===\'Enter\'){event.preventDefault();this.blur();}" /></td>';
+              html += '<td><input class="week-cell-input" value="' + displayVal + '"';
+              if (dayData) html += ' data-row="' + dayData.row + '"';
+              html += ' data-date="' + dates[d] + '" data-project="' + escapeHtml(a.project) + '" data-activity="' + escapeHtml(a.activity) + '" data-orig="' + displayVal + '" onblur="onWeekCellBlur(this)" onkeydown="if(event.key===\'Enter\'){event.preventDefault();this.blur();}" /></td>';
             }
           }
           html += '<td class="has-value">' + formatHM(rowTotal) + '</td></tr>';
@@ -871,36 +927,111 @@
         html += '<td>' + formatHM(dayTotals[d]) + '</td>';
       }
       html += '<td>' + formatHM(grandTotal) + '</td></tr></tbody></table>';
-      html += '<button class="add-row-btn" onclick="openAddModalWeek()">+ Add activity</button>';
+      var allLocked = dates.every(function(d) { return isDateLocked(d); });
+      if (!allLocked) {
+        html += '<button class="add-row-btn" onclick="openAddModalWeek()">+ Add activity</button>';
+      }
       container.innerHTML = html;
     }
 
-    function onWeekCellEdit(input) {
+    function onWeekCellBlur(input) {
       var val = input.value.trim();
-      var row = parseInt(input.dataset.row);
-      if (!row) return;
-      var parsed = val === '' ? 0 : parseHM(val);
-      if (parsed === null) { showError('Invalid format.'); return; }
-      google.script.run
-        .withSuccessHandler(function() { loadWeek(); })
-        .withFailureHandler(function(err) { showError(err.message); })
-        .updateEntry(row, parsed);
-    }
+      var orig = input.dataset.orig || '';
+      if (val === orig) return;
 
-    function onWeekCellAdd(input) {
-      var val = input.value.trim();
-      if (!val) return;
-      var parsed = parseHM(val);
-      if (parsed === null) { showError('Invalid format.'); return; }
-      if (parsed === 0) return;
+      var parsed = val === '' ? 0 : parseHM(val);
+      if (parsed === null) { showError('Invalid format.'); input.value = orig; return; }
+
+      var display = parsed > 0 ? formatHM(parsed) : '';
+      input.value = display;
+      input.dataset.orig = display;
+
       var dateStr = input.dataset.date;
       var project = input.dataset.project;
       var activity = input.dataset.activity;
-      input.disabled = true;
-      google.script.run
-        .withSuccessHandler(function() { loadWeek(); })
-        .withFailureHandler(function(err) { showError(err.message); input.disabled = false; })
-        .addEntry(dateStr, project, activity, parsed);
+
+      if (input.dataset.row) {
+        var row = parseInt(input.dataset.row);
+        updateDayCacheSeconds(dateStr, row, parsed);
+        updateWeekTotals();
+        google.script.run
+          .withSuccessHandler(function(entries) { dayCache[dateStr] = entries; saveDayCache(); })
+          .withFailureHandler(function(err) { showError(err.message); })
+          .updateEntry(row, parsed);
+      } else {
+        if (parsed === 0) { input.value = ''; input.dataset.orig = ''; return; }
+        input.disabled = true;
+        addDayCacheEntry(dateStr, project, activity, parsed);
+        updateWeekTotals();
+        google.script.run
+          .withSuccessHandler(function(entries) {
+            dayCache[dateStr] = entries;
+            saveDayCache();
+            for (var i = 0; i < entries.length; i++) {
+              if (entries[i].project === project && entries[i].activity === activity) {
+                input.dataset.row = entries[i].row;
+                break;
+              }
+            }
+            input.disabled = false;
+          })
+          .withFailureHandler(function(err) { showError(err.message); input.disabled = false; })
+          .addEntry(dateStr, project, activity, parsed);
+      }
+    }
+
+    function updateDayCacheSeconds(dateStr, row, seconds) {
+      var entries = dayCache[dateStr];
+      if (!entries) return;
+      for (var i = 0; i < entries.length; i++) {
+        if (entries[i].row === row) { entries[i].seconds = seconds; saveDayCache(); return; }
+      }
+    }
+
+    function addDayCacheEntry(dateStr, project, activity, seconds) {
+      if (!dayCache[dateStr]) dayCache[dateStr] = [];
+      dayCache[dateStr].push({ row: 0, project: project, activity: activity, seconds: seconds });
+      saveDayCache();
+    }
+
+    function getCellSeconds(cell) {
+      var input = cell.querySelector('input');
+      if (input && input.value.trim()) return parseHM(input.value.trim()) || 0;
+      var span = cell.querySelector('span');
+      if (span && span.classList.contains('has-value') && span.textContent.trim()) return parseHM(span.textContent.trim()) || 0;
+      return 0;
+    }
+
+    function updateWeekTotals() {
+      var table = document.querySelector('.week-table');
+      if (!table) return;
+      var rows = table.querySelectorAll('tbody tr');
+      var colTotals = [0, 0, 0, 0, 0, 0, 0];
+      for (var r = 0; r < rows.length; r++) {
+        var row = rows[r];
+        if (row.classList.contains('total-row')) continue;
+        var cells = row.children;
+        if (cells.length < 9) continue;
+        var rowTotal = 0;
+        for (var d = 0; d < 7; d++) {
+          var secs = getCellSeconds(cells[d + 1]);
+          rowTotal += secs;
+          colTotals[d] += secs;
+        }
+        cells[8].textContent = formatHM(rowTotal);
+      }
+      for (var r = 0; r < rows.length; r++) {
+        if (rows[r].classList.contains('total-row')) {
+          var cells = rows[r].children;
+          var grandTotal = 0;
+          for (var d = 0; d < 7; d++) {
+            grandTotal += colTotals[d];
+            cells[d + 1].textContent = formatHM(colTotals[d]);
+          }
+          cells[8].textContent = formatHM(grandTotal);
+          break;
+        }
+      }
     }
 
     function openAddModalWeek() {
@@ -945,6 +1076,7 @@
       .withSuccessHandler(function(data) {
         projectsData = data.projects;
         localStorage.setItem('scg_timer_projects', JSON.stringify(projectsData));
+        syncCheckpoint = data.syncCheckpoint || null;
 
         if (data.active) {
           isRunning = true;

@@ -1,0 +1,54 @@
+<!DOCTYPE html>
+<html>
+<head>
+  <meta charset="utf-8">
+  <style>
+    * { box-sizing: border-box; margin: 0; padding: 0; }
+    body { width: 640px; min-height: 300px; background: #0d0d1a; color: #e0e0e0; font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif; font-size: 13px; padding: 16px; }
+    h2 { font-size: 15px; color: #f5a623; margin-bottom: 4px; }
+    .week-info { color: #888; margin-bottom: 12px; }
+    .status { padding: 8px 0; color: #888; }
+    .status.error { color: #ef5350; }
+    .status.success { color: #4caf50; }
+
+    table { width: 100%; border-collapse: collapse; font-size: 12px; margin: 8px 0; }
+    th { padding: 6px 4px; color: #f5a623; font-weight: 500; text-align: center; border-bottom: 1px solid #333; }
+    th:first-child { text-align: left; }
+    td { padding: 4px; text-align: center; }
+    td:first-child { text-align: left; color: #888; max-width: 180px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+    tr.project-row td { color: #f5a623; font-weight: 500; padding-top: 8px; text-align: left; }
+    tr.total-row td { border-top: 1px solid #333; font-weight: 600; color: #f5a623; padding-top: 6px; }
+
+    .cell-create { color: #4caf50; font-weight: 600; }
+    .cell-update { color: #ff9800; font-weight: 600; }
+    .cell-match { color: #666; }
+    .cell-skip { color: #444; }
+
+    .actions { margin-top: 12px; text-align: right; }
+    button { background: #f5a623; color: #000; border: none; padding: 8px 20px; border-radius: 4px; font-size: 13px; font-weight: 600; cursor: pointer; }
+    button:disabled { opacity: 0.4; cursor: default; }
+    button:hover:not(:disabled) { background: #ffb74d; }
+
+    .setup { margin: 12px 0; }
+    .setup label { color: #888; font-size: 12px; display: block; margin-bottom: 4px; }
+    .setup input[type="date"] { background: #1a1a2e; border: 1px solid #333; color: #e0e0e0; padding: 6px 10px; border-radius: 4px; font-size: 13px; }
+    .setup button { margin-top: 8px; }
+
+    .legend { display: flex; gap: 16px; margin-top: 8px; font-size: 11px; color: #888; }
+    .legend span::before { content: ''; display: inline-block; width: 8px; height: 8px; border-radius: 50%; margin-right: 4px; vertical-align: middle; }
+    .legend .l-create::before { background: #4caf50; }
+    .legend .l-update::before { background: #ff9800; }
+    .legend .l-match::before { background: #666; }
+  </style>
+</head>
+<body>
+  <h2>SCG Timer &rarr; Kleer</h2>
+  <div id="week-info" class="week-info"></div>
+  <div id="status" class="status">Loading...</div>
+  <div id="content"></div>
+  <div class="actions">
+    <button id="sync-btn" disabled>Sync to Kleer</button>
+  </div>
+  <script src="popup.js"></script>
+</body>
+</html>

@@ -1,0 +1,16 @@
+{
+  "manifest_version": 3,
+  "name": "SCG Timer → Kleer",
+  "version": "1.0",
+  "description": "Sync time entries from SCG Timer to Kleer",
+  "permissions": [],
+  "host_permissions": [
+    "https://my.kleer.se/*",
+    "https://script.google.com/*",
+    "https://script.googleusercontent.com/*"
+  ],
+  "action": {
+    "default_popup": "popup.html",
+    "default_title": "Sync SCG Timer to Kleer"
+  }
+}

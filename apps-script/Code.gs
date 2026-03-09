@@ -3,31 +3,145 @@ var TAB_ENTRIES = 'Entries';
 var TAB_ACTIVE = 'Active';
 var TAB_PROJECTS = 'Projects';
 var TAB_ACCUMULATOR = 'Accumulator';
+var TAB_SETTINGS = 'Settings';
 
 var DEFAULT_PROJECTS = [
-  ['4 - Discoveryplus (Peter Borg)', 'On-call, Holiday', true],
-  ['4 - Discoveryplus (Peter Borg)', 'On-call, Time off', true],
-  ['4 - Discoveryplus (Peter Borg)', 'On-call, Weekday', true],
-  ['4 - Discoveryplus (Peter Borg)', 'On-call, Weekend', true],
-  ['4 - Discoveryplus (Peter Borg)', 'On-call, Work, Rate 1', true],
-  ['4 - Discoveryplus (Peter Borg)', 'On-call, Work, Rate 2', true],
-  ['4 - Discoveryplus (Peter Borg)', 'Overtime, Rate 1', true],
-  ['4 - Discoveryplus (Peter Borg)', 'Overtime, Rate 2', true],
-  ['4 - Discoveryplus (Peter Borg)', 'System development', true],
-  ['4 - Discoveryplus (Peter Borg)', 'Travel time', true],
-  ['13 - SCG Internrapportering', 'Ω All other internal time', true],
-  ['13 - SCG Internrapportering', 'Ω Conference / Kick-off – internal', true],
-  ['13 - SCG Internrapportering', 'Ω Employee Coaching / Check-in', true],
-  ['13 - SCG Internrapportering', 'Ω Internal meeting – planned', true],
-  ['13 - SCG Internrapportering', 'Ω Recruitment', true],
-  ['13 - SCG Internrapportering', 'Ω Sales work / Client meetings', true],
-  ['13 - SCG Internrapportering', 'Ω Training – planned', true]
+  ['4 - Discoveryplus (Peter Borg)', 'On-call, Holiday', true, 2335606, '019cb481-c032-7740-bb95-630a51ab81ec', 'Discovery Dplay Entertainment Limited', '4', true],
+  ['4 - Discoveryplus (Peter Borg)', 'On-call, Time off', true, 2335606, '019cb481-d88d-79c0-a131-a1c4594e54a7', 'Discovery Dplay Entertainment Limited', '4', true],
+  ['4 - Discoveryplus (Peter Borg)', 'On-call, Weekday', true, 2335606, '019cb480-61db-7668-98a6-490dfe9ca3d7', 'Discovery Dplay Entertainment Limited', '4', true],
+  ['4 - Discoveryplus (Peter Borg)', 'On-call, Weekend', true, 2335606, '019cb481-468b-74c1-92dd-3a09817e327a', 'Discovery Dplay Entertainment Limited', '4', true],
+  ['4 - Discoveryplus (Peter Borg)', 'On-call, Work, Rate 1', true, 2335606, '019cb47e-8629-785a-be42-b0a5367d78e6', 'Discovery Dplay Entertainment Limited', '4', true],
+  ['4 - Discoveryplus (Peter Borg)', 'On-call, Work, Rate 2', true, 2335606, '019cb47f-3848-70b7-b5bc-3299f659b6a2', 'Discovery Dplay Entertainment Limited', '4', true],
+  ['4 - Discoveryplus (Peter Borg)', 'Overtime, Rate 1', true, 2335606, '019cb481-f3c9-7731-addc-89316adb6f9b', 'Discovery Dplay Entertainment Limited', '4', true],
+  ['4 - Discoveryplus (Peter Borg)', 'Overtime, Rate 2', true, 2335606, '019cb482-5497-7bdb-a1d3-17e56fd5ea33', 'Discovery Dplay Entertainment Limited', '4', true],
+  ['4 - Discoveryplus (Peter Borg)', 'System development', true, 2335606, '019c7556-8e53-7043-b87c-ae8293462146', 'Discovery Dplay Entertainment Limited', '4', true],
+  ['4 - Discoveryplus (Peter Borg)', 'Travel time', true, 2335606, '019c8b64-06e7-731c-aadd-8d9e112dc6b7', 'Discovery Dplay Entertainment Limited', '4', true],
+  ['13 - SCG Internrapportering', 'Ω All other internal time', true, 2335692, '019c7554-3f92-7c2f-886d-65a53f477dbd', '', '13', false],
+  ['13 - SCG Internrapportering', 'Ω Conference / Kick-off – internal', true, 2335692, '019c7554-f1ac-79bf-b724-0f0548bda3c3', '', '13', false],
+  ['13 - SCG Internrapportering', 'Ω Employee Coaching / Check-in', true, 2335692, '019c7555-a603-7bd3-b221-fead3e15681c', '', '13', false],
+  ['13 - SCG Internrapportering', 'Ω Internal meeting – planned', true, 2335692, '019c7554-c727-73b8-8944-7e0ca18cd339', '', '13', false],
+  ['13 - SCG Internrapportering', 'Ω Recruitment', true, 2335692, '019c7556-1a9f-7991-a18b-f9c81bcd9237', '', '13', false],
+  ['13 - SCG Internrapportering', 'Ω Sales work / Client meetings', true, 2335692, '019c7554-41e8-773c-8111-39889519c8bd', '', '13', false],
+  ['13 - SCG Internrapportering', 'Ω Training – planned', true, 2335692, '019c7557-1b4e-70ce-b3ae-e1e988295acb', '', '13', false]
 ];
 
-function doGet() {
+function doGet(e) {
+  if (e && e.parameter && e.parameter.action) {
+    return handleApiRequest(e.parameter);
+  }
   return HtmlService.createHtmlOutputFromFile('Index')
     .setTitle('SCG Timer')
     .setXFrameOptionsMode(HtmlService.XFrameOptionsMode.ALLOWALL);
+}
+
+function doPost(e) {
+  var params;
+  try {
+    params = JSON.parse(e.postData.contents);
+  } catch (err) {
+    return ContentService.createTextOutput(JSON.stringify({ error: 'Invalid JSON' }))
+      .setMimeType(ContentService.MimeType.JSON);
+  }
+  return handleApiRequest(params);
+}
+
+var API_TOKEN = 'scg-kleer-sync-2026';
+
+function handleApiRequest(params) {
+  if (params.token !== API_TOKEN) {
+    return ContentService.createTextOutput(JSON.stringify({ error: 'Unauthorized' }))
+      .setMimeType(ContentService.MimeType.JSON);
+  }
+  var result;
+  try {
+    switch (params.action) {
+      case 'getWeekEntries':
+        result = getWeekEntries(params.dateStr);
+        break;
+      case 'getProjectsWithKleerIds':
+        result = getProjectsWithKleerIds();
+        break;
+      case 'getAccumulator':
+        result = getAccumulator();
+        break;
+      case 'updateAccumulator':
+        result = updateAccumulator(typeof params.data === 'string' ? JSON.parse(params.data) : params.data);
+        break;
+      case 'getSyncCheckpoint':
+        result = { checkpoint: getSyncCheckpoint() };
+        break;
+      case 'setSyncCheckpoint':
+        result = setSyncCheckpoint(params.dateStr);
+        break;
+      default:
+        result = { error: 'Unknown action: ' + params.action };
+    }
+  } catch (err) {
+    result = { error: err.message };
+  }
+  return ContentService.createTextOutput(JSON.stringify(result))
+    .setMimeType(ContentService.MimeType.JSON);
+}
+
+function getAccumulator() {
+  var ss = getOrCreateSheet();
+  var sheet = ss.getSheetByName(TAB_ACCUMULATOR);
+  var data = sheet.getDataRange().getValues();
+  var result = {};
+  for (var i = 1; i < data.length; i++) {
+    var key = data[i][0] + '|||' + data[i][1];
+    result[key] = data[i][2] || 0;
+  }
+  return result;
+}
+
+function updateAccumulator(entries) {
+  var ss = getOrCreateSheet();
+  var sheet = ss.getSheetByName(TAB_ACCUMULATOR);
+  if (entries.length > 0) {
+    var values = entries.map(function(e) { return [e.project, e.activity, e.remainder_minutes]; });
+    sheet.getRange(2, 1, values.length, 3).setValues(values);
+  }
+  var lastRow = sheet.getLastRow();
+  if (lastRow > entries.length + 1) {
+    sheet.deleteRows(entries.length + 2, lastRow - entries.length - 1);
+  }
+  return { success: true };
+}
+
+function getSetting(key) {
+  var ss = getOrCreateSheet();
+  var sheet = ss.getSheetByName(TAB_SETTINGS);
+  if (!sheet) return null;
+  var data = sheet.getDataRange().getValues();
+  for (var i = 1; i < data.length; i++) {
+    if (data[i][0] === key) return data[i][1];
+  }
+  return null;
+}
+
+function setSetting(key, value) {
+  var ss = getOrCreateSheet();
+  var sheet = ss.getSheetByName(TAB_SETTINGS);
+  if (!sheet) return;
+  var data = sheet.getDataRange().getValues();
+  for (var i = 1; i < data.length; i++) {
+    if (data[i][0] === key) {
+      sheet.getRange(i + 1, 2).setValue(value);
+      return;
+    }
+  }
+  sheet.appendRow([key, value]);
+}
+
+function getSyncCheckpoint() {
+  var val = getSetting('sync_checkpoint_date');
+  return val ? toDateStr(val) : null;
+}
+
+function setSyncCheckpoint(dateStr) {
+  setSetting('sync_checkpoint_date', dateStr);
+  return { success: true };
 }
 
 function getOrCreateSheet() {
@@ -55,7 +169,7 @@ function createSheet() {
   activeSheet.setFrozenRows(1);
 
   var projectsSheet = ss.insertSheet(TAB_PROJECTS);
-  projectsSheet.appendRow(['project', 'activity', 'enabled']);
+  projectsSheet.appendRow(['project', 'activity', 'enabled', 'kleer_project_id', 'kleer_activity_id', 'kleer_client_name', 'kleer_project_number', 'kleer_billable']);
   projectsSheet.setFrozenRows(1);
   for (var i = 0; i < DEFAULT_PROJECTS.length; i++) {
     projectsSheet.appendRow(DEFAULT_PROJECTS[i]);
@@ -65,6 +179,10 @@ function createSheet() {
   accSheet.appendRow(['project', 'activity', 'remainder_minutes']);
   accSheet.setFrozenRows(1);
 
+  var settingsSheet = ss.insertSheet(TAB_SETTINGS);
+  settingsSheet.appendRow(['key', 'value']);
+  settingsSheet.setFrozenRows(1);
+
   return ss;
 }
 
@@ -72,10 +190,12 @@ function getInitData() {
   var projects = getProjects();
   var active = getActive();
   var entries = getEntries(null);
+  var syncCheckpoint = getSyncCheckpoint();
   return {
     projects: projects,
     active: active,
-    entries: entries
+    entries: entries,
+    syncCheckpoint: syncCheckpoint
   };
 }
 
@@ -97,6 +217,29 @@ function getProjects() {
   }
 
   return projects;
+}
+
+function getProjectsWithKleerIds() {
+  var ss = getOrCreateSheet();
+  var sheet = ss.getSheetByName(TAB_PROJECTS);
+  var data = sheet.getDataRange().getValues();
+  var result = [];
+
+  for (var i = 1; i < data.length; i++) {
+    var enabled = data[i][2];
+    if (enabled !== true && enabled !== 'TRUE' && enabled !== 'true') continue;
+    result.push({
+      project: data[i][0],
+      activity: data[i][1],
+      kleerProjectId: data[i][3],
+      kleerActivityId: data[i][4],
+      kleerClientName: data[i][5],
+      kleerProjectNumber: String(data[i][6]),
+      kleerBillable: data[i][7] === true || data[i][7] === 'TRUE' || data[i][7] === 'true'
+    });
+  }
+
+  return result;
 }
 
 function getActive() {
@@ -218,9 +361,10 @@ function stopTimer() {
   var startTime = activeData[1][2] instanceof Date ? activeData[1][2].getTime() : Number(activeData[1][2]);
   var elapsed = Math.round((Date.now() - startTime) / 1000);
 
-  activeSheet.deleteRow(2);
-
   var dateStr = formatDate(new Date());
+  assertNotLocked(dateStr);
+
+  activeSheet.deleteRow(2);
   var entriesSheet = ss.getSheetByName(TAB_ENTRIES);
   var entriesData = entriesSheet.getDataRange().getValues();
 
@@ -242,6 +386,7 @@ function stopTimer() {
 }
 
 function addEntry(dateStr, project, activity, seconds) {
+  assertNotLocked(dateStr);
   var ss = getOrCreateSheet();
   var sheet = ss.getSheetByName(TAB_ENTRIES);
   var data = sheet.getDataRange().getValues();
@@ -276,18 +421,20 @@ function addEntry(dateStr, project, activity, seconds) {
 function updateEntry(row, seconds) {
   var ss = getOrCreateSheet();
   var sheet = ss.getSheetByName(TAB_ENTRIES);
-  sheet.getRange(row, 4).setValue(seconds);
   var dateStr = toDateStr(sheet.getRange(row, 1).getValue());
+  assertNotLocked(dateStr);
+  sheet.getRange(row, 4).setValue(seconds);
   return getEntries(dateStr);
 }
 
 function updateEntryFull(row, project, activity, seconds) {
   var ss = getOrCreateSheet();
   var sheet = ss.getSheetByName(TAB_ENTRIES);
+  var dateStr = toDateStr(sheet.getRange(row, 1).getValue());
+  assertNotLocked(dateStr);
   sheet.getRange(row, 2).setValue(project);
   sheet.getRange(row, 3).setValue(activity);
   sheet.getRange(row, 4).setValue(seconds);
-  var dateStr = toDateStr(sheet.getRange(row, 1).getValue());
   return getEntries(dateStr);
 }
 
@@ -295,8 +442,21 @@ function deleteEntry(row) {
   var ss = getOrCreateSheet();
   var sheet = ss.getSheetByName(TAB_ENTRIES);
   var dateStr = toDateStr(sheet.getRange(row, 1).getValue());
+  assertNotLocked(dateStr);
   sheet.deleteRow(row);
   return getEntries(dateStr);
+}
+
+function isDateLocked(dateStr) {
+  var checkpoint = getSyncCheckpoint();
+  if (!checkpoint) return false;
+  return dateStr <= checkpoint;
+}
+
+function assertNotLocked(dateStr) {
+  if (isDateLocked(dateStr)) {
+    throw new Error('This date has been synced to Kleer and is locked.');
+  }
 }
 
 function toDateStr(val) {
