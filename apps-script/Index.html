@@ -48,6 +48,8 @@
     }
 
     .nav-btn:hover { border-color: #f5a623; color: #f5a623; }
+    .nav-btn:disabled { color: #555; border-color: transparent; cursor: default; opacity: 1; }
+    .nav-btn:disabled:hover { border-color: transparent; color: #555; }
 
     .view-toggle {
       display: flex;
@@ -182,6 +184,7 @@
     }
 
     .modal-save { background: #f5a623; color: #1a1a2e; }
+    .modal-start { background: #4caf50; color: #fff; }
     .modal-cancel { background: #333; color: #e0e0e0; }
     .modal-delete { background: #f44336; color: #fff; }
 
@@ -253,6 +256,7 @@
     .week-table th.clickable-day { cursor: pointer; }
     .week-table th.clickable-day:hover { color: #fff; }
     .week-table th.today { color: #4caf50; }
+    .week-table th.locked-day { color: #555; cursor: default; }
     .week-table td { padding: 0.3rem; text-align: center; font-variant-numeric: tabular-nums; }
     .week-table td.activity-label { text-align: left; padding-left: 0.5rem; color: #888; max-width: 150px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
     .week-table td.project-label { text-align: left; padding-left: 0.5rem; padding-top: 0.6rem; color: #f5a623; font-weight: 500; }
@@ -329,7 +333,7 @@
 
     <div id="day-view">
       <div class="nav-bar">
-        <button class="nav-btn" onclick="navDay(-1)">&larr;</button>
+        <button class="nav-btn" id="day-nav-prev" onclick="navDay(-1)">&larr;</button>
         <button class="nav-btn" id="today-btn-day" onclick="goToday()" style="display:none;">Today</button>
         <h2 id="day-label"></h2>
         <button class="nav-btn" onclick="navDay(1)">&rarr;</button>
@@ -344,7 +348,7 @@
 
     <div id="week-view" style="display:none;">
       <div class="nav-bar">
-        <button class="nav-btn" onclick="navWeek(-1)">&larr;</button>
+        <button class="nav-btn" id="week-nav-prev" onclick="navWeek(-1)">&larr;</button>
         <button class="nav-btn" id="today-btn-week" onclick="goToday()" style="display:none;">Today</button>
         <h2 id="week-label"></h2>
         <button class="nav-btn" onclick="navWeek(1)">&rarr;</button>
@@ -372,6 +376,7 @@
       <div class="modal-actions">
         <button class="modal-cancel" onclick="closeModal()">Cancel</button>
         <button id="modal-delete-btn" class="modal-delete" onclick="onModalDelete()">Delete</button>
+        <button id="modal-start-btn" class="modal-start" onclick="onModalStart()" style="display:none;">Start</button>
         <button class="modal-save" onclick="onModalSave()">Save</button>
       </div>
     </div>
@@ -536,6 +541,32 @@
       var thisMonday = getMonday(new Date());
       var onThisWeek = fmtDate(monday) === fmtDate(thisMonday);
       document.getElementById('today-btn-week').style.display = onThisWeek ? 'none' : 'inline-block';
+
+      var prevDay = new Date(viewDate);
+      prevDay.setDate(prevDay.getDate() - 1);
+      var dayPrevBtn = document.getElementById('day-nav-prev');
+      if (isDateLocked(fmtDate(prevDay))) {
+        dayPrevBtn.innerHTML = '&#x1F512;';
+        dayPrevBtn.disabled = true;
+        dayPrevBtn.onclick = null;
+      } else {
+        dayPrevBtn.innerHTML = '&larr;';
+        dayPrevBtn.disabled = false;
+        dayPrevBtn.onclick = function() { navDay(-1); };
+      }
+
+      var prevSunday = new Date(monday);
+      prevSunday.setDate(monday.getDate() - 1);
+      var weekPrevBtn = document.getElementById('week-nav-prev');
+      if (isDateLocked(fmtDate(prevSunday))) {
+        weekPrevBtn.innerHTML = '&#x1F512;';
+        weekPrevBtn.disabled = true;
+        weekPrevBtn.onclick = null;
+      } else {
+        weekPrevBtn.innerHTML = '&larr;';
+        weekPrevBtn.disabled = false;
+        weekPrevBtn.onclick = function() { navWeek(-1); };
+      }
     }
 
     function navDay(offset) {
@@ -688,6 +719,7 @@
       editingRow = entry.row;
       document.getElementById('modal-title').textContent = 'Edit Entry';
       document.getElementById('modal-delete-btn').style.display = entryIsRunning ? 'none' : 'block';
+      document.getElementById('modal-start-btn').style.display = 'none';
       populateModalProjects();
       document.getElementById('modal-project').value = entry.project;
       onModalProjectChange();
@@ -702,6 +734,7 @@
       editingRow = null;
       document.getElementById('modal-title').textContent = 'Add Activity';
       document.getElementById('modal-delete-btn').style.display = 'none';
+      document.getElementById('modal-start-btn').style.display = isToday(viewDate) ? '' : 'none';
       populateModalProjects();
 
       // Restore last selection
@@ -725,6 +758,7 @@
     function closeModal() {
       document.getElementById('modal-overlay').classList.remove('visible');
       document.querySelector('.modal-save').disabled = false;
+      document.getElementById('modal-start-btn').disabled = false;
       editingRow = null;
     }
 
@@ -777,6 +811,76 @@
         })
         .withFailureHandler(function(err) { showError(err.message); })
         .deleteEntry(editingRow);
+    }
+
+    function onModalStart() {
+      var project = document.getElementById('modal-project').value;
+      var activity = document.getElementById('modal-activity').value;
+      if (!project || !activity) { showError('Select project and activity.'); return; }
+
+      var startBtn = document.getElementById('modal-start-btn');
+      if (startBtn.disabled) return;
+      startBtn.disabled = true;
+
+      localStorage.setItem('scg_timer_last', JSON.stringify({ project: project, activity: activity }));
+
+      var alreadyExists = currentEntries.some(function(e) {
+        return e.project === project && e.activity === activity;
+      });
+
+      function doStart() {
+        google.script.run
+          .withSuccessHandler(function(result) {
+            isRunning = true;
+            activeInfo = result;
+            timerInterval = setInterval(function() { renderDayEntries(currentEntries); }, 1000);
+            startBtn.disabled = false;
+            closeModal();
+            loadDay();
+          })
+          .withFailureHandler(function(err) { showError(err.message); startBtn.disabled = false; })
+          .startTimer(project, activity);
+      }
+
+      if (isRunning) {
+        google.script.run
+          .withSuccessHandler(function(entries) {
+            isRunning = false;
+            activeInfo = null;
+            if (timerInterval) clearInterval(timerInterval);
+            timerInterval = null;
+            currentEntries = entries;
+            dayCache[fmtDate(new Date())] = entries;
+            saveDayCache();
+            if (alreadyExists) {
+              doStart();
+            } else {
+              google.script.run
+                .withSuccessHandler(function(entries2) {
+                  currentEntries = entries2;
+                  dayCache[fmtDate(viewDate)] = entries2;
+                  saveDayCache();
+                  doStart();
+                })
+                .withFailureHandler(function(err) { showError(err.message); startBtn.disabled = false; })
+                .addEntry(fmtDate(viewDate), project, activity, 0);
+            }
+          })
+          .withFailureHandler(function(err) { showError(err.message); startBtn.disabled = false; })
+          .stopTimer();
+      } else if (alreadyExists) {
+        doStart();
+      } else {
+        google.script.run
+          .withSuccessHandler(function(entries) {
+            currentEntries = entries;
+            dayCache[fmtDate(viewDate)] = entries;
+            saveDayCache();
+            doStart();
+          })
+          .withFailureHandler(function(err) { showError(err.message); startBtn.disabled = false; })
+          .addEntry(fmtDate(viewDate), project, activity, 0);
+      }
     }
 
     // --- Week view ---
@@ -888,8 +992,14 @@
       var dayTotals = [];
       for (var d = 0; d < 7; d++) {
         var dt = new Date(dates[d] + 'T12:00:00');
-        var cls = dates[d] === todayStr ? ' class="today clickable-day"' : ' class="clickable-day"';
-        html += '<th' + cls + ' onclick="goToDay(\'' + dates[d] + '\')">' + DAYS[dt.getDay()] + '<br><span class="day-names">' + dt.getDate() + '</span></th>';
+        var dayLk = isDateLocked(dates[d]);
+        if (dayLk) {
+          var cls = dates[d] === todayStr ? ' class="today locked-day"' : ' class="locked-day"';
+          html += '<th' + cls + '>' + DAYS[dt.getDay()] + '<br><span class="day-names">' + dt.getDate() + ' &#x1F512;</span></th>';
+        } else {
+          var cls = dates[d] === todayStr ? ' class="today clickable-day"' : ' class="clickable-day"';
+          html += '<th' + cls + ' onclick="goToDay(\'' + dates[d] + '\')">' + DAYS[dt.getDay()] + '<br><span class="day-names">' + dt.getDate() + '</span></th>';
+        }
         dayTotals.push(0);
       }
       html += '<th>Total</th></tr></thead><tbody>';
@@ -1087,6 +1197,7 @@
         currentEntries = data.entries;
         renderDayEntries(data.entries);
         document.getElementById('day-label').textContent = dayLabel(viewDate);
+        updateTodayButtons();
       })
       .withFailureHandler(function(err) {
         showError('Failed to load: ' + err.message);
