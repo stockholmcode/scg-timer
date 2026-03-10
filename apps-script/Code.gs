@@ -6,25 +6,7 @@ var TAB_ACCUMULATOR = 'Accumulator';
 var TAB_SETTINGS = 'Settings';
 var TAB_LOG = 'Log';
 
-var DEFAULT_PROJECTS = [
-  ['4 - Discoveryplus (Peter Borg)', 'On-call, Holiday', true, 2335606, '019cb481-c032-7740-bb95-630a51ab81ec', 'Discovery Dplay Entertainment Limited', '4', true],
-  ['4 - Discoveryplus (Peter Borg)', 'On-call, Time off', true, 2335606, '019cb481-d88d-79c0-a131-a1c4594e54a7', 'Discovery Dplay Entertainment Limited', '4', true],
-  ['4 - Discoveryplus (Peter Borg)', 'On-call, Weekday', true, 2335606, '019cb480-61db-7668-98a6-490dfe9ca3d7', 'Discovery Dplay Entertainment Limited', '4', true],
-  ['4 - Discoveryplus (Peter Borg)', 'On-call, Weekend', true, 2335606, '019cb481-468b-74c1-92dd-3a09817e327a', 'Discovery Dplay Entertainment Limited', '4', true],
-  ['4 - Discoveryplus (Peter Borg)', 'On-call, Work, Rate 1', true, 2335606, '019cb47e-8629-785a-be42-b0a5367d78e6', 'Discovery Dplay Entertainment Limited', '4', true],
-  ['4 - Discoveryplus (Peter Borg)', 'On-call, Work, Rate 2', true, 2335606, '019cb47f-3848-70b7-b5bc-3299f659b6a2', 'Discovery Dplay Entertainment Limited', '4', true],
-  ['4 - Discoveryplus (Peter Borg)', 'Overtime, Rate 1', true, 2335606, '019cb481-f3c9-7731-addc-89316adb6f9b', 'Discovery Dplay Entertainment Limited', '4', true],
-  ['4 - Discoveryplus (Peter Borg)', 'Overtime, Rate 2', true, 2335606, '019cb482-5497-7bdb-a1d3-17e56fd5ea33', 'Discovery Dplay Entertainment Limited', '4', true],
-  ['4 - Discoveryplus (Peter Borg)', 'System development', true, 2335606, '019c7556-8e53-7043-b87c-ae8293462146', 'Discovery Dplay Entertainment Limited', '4', true],
-  ['4 - Discoveryplus (Peter Borg)', 'Travel time', true, 2335606, '019c8b64-06e7-731c-aadd-8d9e112dc6b7', 'Discovery Dplay Entertainment Limited', '4', true],
-  ['13 - SCG Internrapportering', 'Ω All other internal time', true, 2335692, '019c7554-3f92-7c2f-886d-65a53f477dbd', '', '13', false],
-  ['13 - SCG Internrapportering', 'Ω Conference / Kick-off – internal', true, 2335692, '019c7554-f1ac-79bf-b724-0f0548bda3c3', '', '13', false],
-  ['13 - SCG Internrapportering', 'Ω Employee Coaching / Check-in', true, 2335692, '019c7555-a603-7bd3-b221-fead3e15681c', '', '13', false],
-  ['13 - SCG Internrapportering', 'Ω Internal meeting – planned', true, 2335692, '019c7554-c727-73b8-8944-7e0ca18cd339', '', '13', false],
-  ['13 - SCG Internrapportering', 'Ω Recruitment', true, 2335692, '019c7556-1a9f-7991-a18b-f9c81bcd9237', '', '13', false],
-  ['13 - SCG Internrapportering', 'Ω Sales work / Client meetings', true, 2335692, '019c7554-41e8-773c-8111-39889519c8bd', '', '13', false],
-  ['13 - SCG Internrapportering', 'Ω Training – planned', true, 2335692, '019c7557-1b4e-70ce-b3ae-e1e988295acb', '', '13', false]
-];
+var DEFAULT_PROJECTS = [];
 
 function doGet(e) {
   if (e && e.parameter && e.parameter.action) {
@@ -76,6 +58,9 @@ function handleApiRequest(params) {
         break;
       case 'archiveSyncedEntries':
         result = archiveSyncedEntries();
+        break;
+      case 'syncProjects':
+        result = syncProjects(typeof params.data === 'string' ? JSON.parse(params.data) : params.data);
         break;
       default:
         result = { error: 'Unknown action: ' + params.action };
@@ -160,6 +145,7 @@ function getOrCreateSheet() {
   var files = DriveApp.getFilesByName(SHEET_NAME);
   while (files.hasNext()) {
     var file = files.next();
+    if (file.isTrashed()) continue;
     var ss = SpreadsheetApp.open(file);
     if (ss.getSheetByName(TAB_ENTRIES)) {
       return ss;
@@ -252,6 +238,37 @@ function getProjectsWithKleerIds() {
   }
 
   return result;
+}
+
+function syncProjects(incoming) {
+  var ss = getOrCreateSheet();
+  var sheet = ss.getSheetByName(TAB_PROJECTS);
+  var data = sheet.getDataRange().getValues();
+
+  var existing = {};
+  for (var i = 1; i < data.length; i++) {
+    var key = String(data[i][3]) + '|||' + String(data[i][4]);
+    existing[key] = i + 1;
+  }
+
+  var added = 0;
+  var updated = 0;
+  for (var j = 0; j < incoming.length; j++) {
+    var p = incoming[j];
+    var key = String(p.kleerProjectId) + '|||' + String(p.kleerActivityId);
+    var row = [p.project, p.activity, true, p.kleerProjectId, p.kleerActivityId, p.kleerClientName || '', p.kleerProjectNumber || '', p.kleerBillable || false];
+
+    if (existing[key]) {
+      var rowNum = existing[key];
+      sheet.getRange(rowNum, 1, 1, 8).setValues([row]);
+      updated++;
+    } else {
+      sheet.appendRow(row);
+      added++;
+    }
+  }
+
+  return { added: added, updated: updated };
 }
 
 function getActive() {

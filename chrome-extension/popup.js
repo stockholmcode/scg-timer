@@ -2,16 +2,61 @@ const APPS_SCRIPT_URL = 'https://script.google.com/macros/s/AKfycbzN_N87CFV22ZVy
 const KLEER_BASE = 'https://my.kleer.se/web2/time-reporting';
 const KLEER_DATA_WEEK = 'routes/_secure._app+/time-reporting+/week.($year).($weekNumber)';
 const KLEER_DATA_DAY = 'routes/_secure._app+/time-reporting+/day.($year).($month).($day)';
-const KLEER_DATA_LAYOUT = 'routes/_secure._app+/_layout';
 const API_TOKEN = 'scg-kleer-sync-2026';
 const DAY_NAMES = ['', 'Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat', 'Sun'];
 
 let pendingWeeks = [];
+let cachedLayout = null;
 
 document.addEventListener('DOMContentLoaded', function() {
   document.getElementById('sync-btn').addEventListener('click', doSync);
   init();
 });
+
+async function fetchLayout() {
+  if (cachedLayout) return cachedLayout;
+  const now = new Date();
+  const year = getISOWeekYear(now);
+  const num = getISOWeekNumber(now);
+  cachedLayout = await fetchKleerLayout(year, num);
+  return cachedLayout;
+}
+
+function buildProjectsFromLayout(layout) {
+  console.log('Layout keys:', layout ? Object.keys(layout) : 'null');
+  console.log('projectAbsencePickerItems:', layout?.projectAbsencePickerItems?.length, 'activityPickerItems:', layout?.activityPickerItems?.length);
+  if (!layout || !layout.projectAbsencePickerItems || !layout.activityPickerItems) return [];
+  const actMap = {};
+  for (const a of layout.activityPickerItems) {
+    actMap[a.id] = a;
+  }
+  const result = [];
+  for (const proj of layout.projectAbsencePickerItems) {
+    if (!proj.activities || !proj.id) continue;
+    const projectName = proj.projectNumber + ' - ' + proj.name;
+    for (const actId of proj.activities) {
+      const act = actMap[actId];
+      if (!act) continue;
+      result.push({
+        project: projectName,
+        activity: act.name,
+        kleerProjectId: proj.id,
+        kleerActivityId: actId,
+        kleerClientName: proj.clientName || '',
+        kleerProjectNumber: proj.projectNumber || '',
+        kleerBillable: act.billable || false
+      });
+    }
+  }
+  return result;
+}
+
+async function syncProjectsFromKleer() {
+  const layout = await fetchLayout();
+  const projectMappings = buildProjectsFromLayout(layout);
+  if (projectMappings.length === 0) return { added: 0, updated: 0 };
+  return fetchScg('syncProjects', { data: projectMappings });
+}
 
 async function init() {
   try {
@@ -21,6 +66,19 @@ async function init() {
       fetchScg('getProjectsWithKleerIds'),
       fetchScg('getAccumulator')
     ]);
+
+    if (projects.length === 0) {
+      setStatus('No projects configured. Syncing from Kleer...');
+      const syncResult = await syncProjectsFromKleer();
+      if (syncResult.added > 0) {
+        setStatus('Synced ' + syncResult.added + ' activities. Reloading...');
+        pendingWeeks = [];
+        cachedLayout = null;
+        return init();
+      }
+      setStatus('No projects found in Kleer. Check your Kleer login.', 'error');
+      return;
+    }
 
     const checkpoint = checkpointResp.checkpoint || null;
     const today = formatDate(new Date());
@@ -47,7 +105,7 @@ async function init() {
       weeks.length + ' week(s) to sync: ' + weeks.map(w => 'W' + w.num).join(', ');
 
     setStatus('Loading week data...');
-    const kleerLayout = await fetchKleerLayout(weeks[0].year, weeks[0].num);
+    const kleerLayout = await fetchLayout();
     const activityMeta = buildActivityMeta(kleerLayout);
 
     let runningAccumulator = Object.assign({}, accumulator);
@@ -116,10 +174,28 @@ async function fetchKleerWeek(year, weekNum) {
 }
 
 async function fetchKleerLayout(year, weekNum) {
-  const url = KLEER_BASE + '/week/' + year + '/' + weekNum + '?_data=' + encodeURIComponent(KLEER_DATA_LAYOUT);
+  const url = KLEER_BASE + '/week/' + year + '/' + weekNum;
   const resp = await fetch(url, { credentials: 'include' });
-  if (!resp.ok) throw new Error('Failed to load Kleer activity data (' + resp.status + '). Are you logged in?');
-  return parseRemixResponse(resp);
+  if (!resp.ok) throw new Error('Failed to load Kleer page (' + resp.status + '). Are you logged in?');
+  const html = await resp.text();
+  return {
+    projectAbsencePickerItems: extractJsonArray(html, 'projectAbsencePickerItems'),
+    activityPickerItems: extractJsonArray(html, 'activityPickerItems')
+  };
+}
+
+function extractJsonArray(text, key) {
+  const marker = '"' + key + '":';
+  const start = text.indexOf(marker);
+  if (start === -1) return [];
+  var arrStart = text.indexOf('[', start + marker.length);
+  if (arrStart === -1) return [];
+  var depth = 0;
+  for (var i = arrStart; i < text.length; i++) {
+    if (text[i] === '[') depth++;
+    else if (text[i] === ']') { depth--; if (depth === 0) return JSON.parse(text.substring(arrStart, i + 1)); }
+  }
+  return [];
 }
 
 async function parseRemixResponse(resp) {
@@ -288,6 +364,13 @@ async function doSync() {
   const btn = document.getElementById('sync-btn');
   btn.disabled = true;
   btn.textContent = 'Syncing...';
+
+  try {
+    setStatus('Syncing projects from Kleer...');
+    await syncProjectsFromKleer();
+  } catch (err) {
+    console.error('Project sync failed:', err);
+  }
 
   let totalDone = 0;
   let totalErrors = 0;

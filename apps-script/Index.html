@@ -100,6 +100,7 @@
     }
 
     .entry-duration.running-duration { color: #4caf50; }
+    .week-cell-value.running-duration { color: #4caf50; }
     .entry.locked { opacity: 0.5; cursor: default; }
     .week-cell-value.locked { opacity: 0.5; }
 
@@ -383,6 +384,10 @@
   </div>
 
   <script>
+    document.addEventListener('keydown', function(e) {
+      if (e.key === 'Escape') closeModal();
+    });
+
     // Detect touch device and add class for mobile styles
     if ('ontouchstart' in window || navigator.maxTouchPoints > 0) {
       document.body.classList.add('touch');
@@ -403,6 +408,7 @@
     var dayCache = JSON.parse(localStorage.getItem('scg_timer_day_cache') || '{}');
     var editingRow = null; // null = adding new
     var syncCheckpoint = null;
+    var userActed = false;
 
     function isDateLocked(dateStr) {
       return syncCheckpoint && dateStr <= syncCheckpoint;
@@ -455,52 +461,76 @@
     function isToday(d) { return fmtDate(d) === fmtDate(new Date()); }
 
     function dayLabel(d) {
-      if (isToday(d)) return 'Today';
-      return DAYS[d.getDay()] + ' ' + d.getDate() + ' ' + MONTHS[d.getMonth()];
+      var label = DAYS[d.getDay()] + ' ' + d.getDate() + ' ' + MONTHS[d.getMonth()];
+      if (isToday(d)) label = 'Today \u2013 ' + label;
+      return label;
     }
 
     function populateProjectSelect() {
       // For main cache only
     }
 
+    function cacheActiveTimer() {
+      if (isRunning && activeInfo) {
+        localStorage.setItem('scg_timer_active', JSON.stringify(activeInfo));
+      } else {
+        localStorage.removeItem('scg_timer_active');
+      }
+    }
+
     // --- Play/Stop per row ---
 
+    function optimisticStop() {
+      var elapsed = Math.floor((Date.now() - activeInfo.start_time) / 1000);
+      var proj = activeInfo.project, act = activeInfo.activity;
+      isRunning = false;
+      activeInfo = null;
+      cacheActiveTimer();
+      if (timerInterval) clearInterval(timerInterval);
+      timerInterval = null;
+      currentEntries.forEach(function(e) {
+        if (e.project === proj && e.activity === act) e.seconds += elapsed;
+      });
+      var todayDs = fmtDate(new Date());
+      dayCache[todayDs] = currentEntries;
+      saveDayCache();
+    }
+
+    function optimisticStart(project, activity) {
+      isRunning = true;
+      activeInfo = { project: project, activity: activity, start_time: Date.now() };
+      cacheActiveTimer();
+      timerInterval = setInterval(tickTimer, 1000);
+    }
+
+    function syncFromServer(entries) {
+      var todayDs = fmtDate(new Date());
+      currentEntries = entries;
+      dayCache[todayDs] = entries;
+      saveDayCache();
+      if (currentView === 'day' && fmtDate(viewDate) === todayDs) renderDayEntries(entries);
+    }
+
     function onPlayStop(project, activity) {
+      userActed = true;
       if (isRunning && activeInfo && activeInfo.project === project && activeInfo.activity === activity) {
-        // Stop this one
+        optimisticStop();
+        renderDayEntries(currentEntries);
         google.script.run
-          .withSuccessHandler(function(entries) {
-            isRunning = false;
-            activeInfo = null;
-            if (timerInterval) clearInterval(timerInterval);
-            timerInterval = null;
-            currentEntries = entries;
-            var todayDs = fmtDate(new Date());
-            dayCache[todayDs] = entries;
-            saveDayCache();
-            renderDayEntries(entries);
-          })
+          .withSuccessHandler(syncFromServer)
           .withFailureHandler(function(err) { showError(err.message); })
           .stopTimer();
       } else if (isRunning) {
-        // Stop current, then start this one
+        optimisticStop();
+        optimisticStart(project, activity);
+        renderDayEntries(currentEntries);
         google.script.run
           .withSuccessHandler(function(entries) {
-            isRunning = false;
-            activeInfo = null;
-            if (timerInterval) clearInterval(timerInterval);
-            timerInterval = null;
-            var todayDs = fmtDate(new Date());
-            dayCache[todayDs] = entries;
-            saveDayCache();
-            currentEntries = entries;
-            // Now start the new one
+            syncFromServer(entries);
             google.script.run
               .withSuccessHandler(function(result) {
-                isRunning = true;
                 activeInfo = result;
-                timerInterval = setInterval(function() { renderDayEntries(currentEntries); }, 1000);
-                loadDay();
+                cacheActiveTimer();
               })
               .withFailureHandler(function(err) { showError(err.message); })
               .startTimer(project, activity);
@@ -508,17 +538,30 @@
           .withFailureHandler(function(err) { showError(err.message); })
           .stopTimer();
       } else {
-        // Start
+        optimisticStart(project, activity);
+        renderDayEntries(currentEntries);
         google.script.run
           .withSuccessHandler(function(result) {
-            isRunning = true;
             activeInfo = result;
-            timerInterval = setInterval(function() { renderDayEntries(currentEntries); }, 1000);
-            renderDayEntries(currentEntries);
+            cacheActiveTimer();
           })
           .withFailureHandler(function(err) { showError(err.message); })
           .startTimer(project, activity);
       }
+    }
+
+    function tickTimer() {
+      if (currentView === 'day') renderDayEntries(currentEntries);
+      else if (currentView === 'week') updateWeekRunningCell();
+    }
+
+    function updateWeekRunningCell() {
+      var cell = document.getElementById('week-running-cell');
+      if (!cell || !activeInfo) return;
+      var baseSecs = parseInt(cell.dataset.baseSecs) || 0;
+      var elapsed = Math.floor((Date.now() - activeInfo.start_time) / 1000);
+      cell.textContent = formatHM(baseSecs + elapsed);
+      updateWeekTotals();
     }
 
     // --- Day view ---
@@ -673,9 +716,9 @@
         div.appendChild(infoDiv);
         div.appendChild(durSpan);
 
-        if (!locked) {
+        if (!locked && !entryIsRunning) {
           div.addEventListener('click', function() {
-            openEditModal(e, entryIsRunning);
+            openEditModal(e, false);
           });
         }
 
@@ -773,113 +816,114 @@
       if (!project || !activity) { showError('Select project and activity.'); return; }
       if (timeVal === null) { showError('Invalid time format.'); return; }
 
-      saveBtn.disabled = true;
-
       localStorage.setItem('scg_timer_last', JSON.stringify({ project: project, activity: activity }));
+
+      var ds = fmtDate(viewDate);
+      if (editingRow) {
+        currentEntries.forEach(function(e) {
+          if (e.row === editingRow) { e.project = project; e.activity = activity; e.seconds = timeVal; }
+        });
+      } else {
+        currentEntries.push({ row: 0, project: project, activity: activity, seconds: timeVal });
+      }
+      dayCache[ds] = currentEntries;
+      saveDayCache();
+      if (currentView === 'day') renderDayEntries(currentEntries);
+      else loadWeek();
+      closeModal();
 
       function onSaveSuccess(entries) {
         currentEntries = entries;
-        dayCache[fmtDate(viewDate)] = entries;
+        dayCache[ds] = entries;
         saveDayCache();
-        if (currentView === 'day') renderDayEntries(entries);
-        else loadWeek();
-        closeModal();
+        if (currentView === 'day' && fmtDate(viewDate) === ds) renderDayEntries(entries);
       }
 
       if (editingRow) {
         google.script.run
           .withSuccessHandler(onSaveSuccess)
-          .withFailureHandler(function(err) { showError(err.message); saveBtn.disabled = false; })
+          .withFailureHandler(function(err) { showError(err.message); })
           .updateEntryFull(editingRow, project, activity, timeVal);
       } else {
         google.script.run
           .withSuccessHandler(onSaveSuccess)
-          .withFailureHandler(function(err) { showError(err.message); saveBtn.disabled = false; })
-          .addEntry(fmtDate(viewDate), project, activity, timeVal);
+          .withFailureHandler(function(err) { showError(err.message); })
+          .addEntry(ds, project, activity, timeVal);
       }
     }
 
     function onModalDelete() {
       if (!editingRow) return;
+      var row = editingRow;
+      var ds = fmtDate(viewDate);
+      currentEntries = currentEntries.filter(function(e) { return e.row !== row; });
+      dayCache[ds] = currentEntries;
+      saveDayCache();
+      renderDayEntries(currentEntries);
+      closeModal();
+
       google.script.run
         .withSuccessHandler(function(entries) {
           currentEntries = entries;
-          dayCache[fmtDate(viewDate)] = entries;
+          dayCache[ds] = entries;
           saveDayCache();
-          renderDayEntries(entries);
-          closeModal();
+          if (currentView === 'day' && fmtDate(viewDate) === ds) renderDayEntries(entries);
         })
         .withFailureHandler(function(err) { showError(err.message); })
-        .deleteEntry(editingRow);
+        .deleteEntry(row);
     }
 
     function onModalStart() {
       var project = document.getElementById('modal-project').value;
       var activity = document.getElementById('modal-activity').value;
       if (!project || !activity) { showError('Select project and activity.'); return; }
-
-      var startBtn = document.getElementById('modal-start-btn');
-      if (startBtn.disabled) return;
-      startBtn.disabled = true;
+      userActed = true;
 
       localStorage.setItem('scg_timer_last', JSON.stringify({ project: project, activity: activity }));
+
+      var wasRunning = isRunning;
+      if (wasRunning) optimisticStop();
 
       var alreadyExists = currentEntries.some(function(e) {
         return e.project === project && e.activity === activity;
       });
-
-      function doStart() {
-        google.script.run
-          .withSuccessHandler(function(result) {
-            isRunning = true;
-            activeInfo = result;
-            timerInterval = setInterval(function() { renderDayEntries(currentEntries); }, 1000);
-            startBtn.disabled = false;
-            closeModal();
-            loadDay();
-          })
-          .withFailureHandler(function(err) { showError(err.message); startBtn.disabled = false; })
-          .startTimer(project, activity);
+      if (!alreadyExists) {
+        currentEntries.push({ row: 0, project: project, activity: activity, seconds: 0 });
+        dayCache[fmtDate(viewDate)] = currentEntries;
+        saveDayCache();
       }
 
-      if (isRunning) {
-        google.script.run
-          .withSuccessHandler(function(entries) {
-            isRunning = false;
-            activeInfo = null;
-            if (timerInterval) clearInterval(timerInterval);
-            timerInterval = null;
-            currentEntries = entries;
-            dayCache[fmtDate(new Date())] = entries;
-            saveDayCache();
-            if (alreadyExists) {
-              doStart();
-            } else {
+      optimisticStart(project, activity);
+      closeModal();
+      renderDayEntries(currentEntries);
+
+      function doServerStart() {
+        if (!alreadyExists) {
+          google.script.run
+            .withSuccessHandler(function(entries) {
+              syncFromServer(entries);
               google.script.run
-                .withSuccessHandler(function(entries2) {
-                  currentEntries = entries2;
-                  dayCache[fmtDate(viewDate)] = entries2;
-                  saveDayCache();
-                  doStart();
-                })
-                .withFailureHandler(function(err) { showError(err.message); startBtn.disabled = false; })
-                .addEntry(fmtDate(viewDate), project, activity, 0);
-            }
-          })
-          .withFailureHandler(function(err) { showError(err.message); startBtn.disabled = false; })
-          .stopTimer();
-      } else if (alreadyExists) {
-        doStart();
-      } else {
+                .withSuccessHandler(function(result) { activeInfo = result; cacheActiveTimer(); })
+                .withFailureHandler(function(err) { showError(err.message); })
+                .startTimer(project, activity);
+            })
+            .withFailureHandler(function(err) { showError(err.message); })
+            .addEntry(fmtDate(viewDate), project, activity, 0);
+        } else {
+          google.script.run
+            .withSuccessHandler(function(result) { activeInfo = result; cacheActiveTimer(); })
+            .withFailureHandler(function(err) { showError(err.message); })
+            .startTimer(project, activity);
+        }
+      }
+
+      if (wasRunning) {
         google.script.run
-          .withSuccessHandler(function(entries) {
-            currentEntries = entries;
-            dayCache[fmtDate(viewDate)] = entries;
-            saveDayCache();
-            doStart();
-          })
-          .withFailureHandler(function(err) { showError(err.message); startBtn.disabled = false; })
-          .addEntry(fmtDate(viewDate), project, activity, 0);
+          .withSuccessHandler(function(entries) { syncFromServer(entries); doServerStart(); })
+          .withFailureHandler(function(err) { showError(err.message); })
+          .stopTimer();
+      } else {
+        doServerStart();
       }
     }
 
@@ -975,19 +1019,6 @@
         activities[key].days[e.date] = { seconds: e.seconds, row: e.row };
       });
 
-      if (activityOrder.length === 0) {
-        container.innerHTML = '<div class="no-entries">No entries this week</div>';
-        return;
-      }
-
-      var projects = {};
-      var projectOrder = [];
-      activityOrder.forEach(function(key) {
-        var a = activities[key];
-        if (!projects[a.project]) { projects[a.project] = []; projectOrder.push(a.project); }
-        projects[a.project].push(key);
-      });
-
       var html = '<table class="week-table"><thead><tr><th></th>';
       var dayTotals = [];
       for (var d = 0; d < 7; d++) {
@@ -1004,6 +1035,22 @@
       }
       html += '<th>Total</th></tr></thead><tbody>';
 
+      if (activityOrder.length === 0) {
+        html += '</tbody></table><div class="no-entries">No entries this week</div>';
+        var allLocked = dates.every(function(d) { return isDateLocked(d); });
+        if (!allLocked) html += '<button class="add-row-btn" onclick="openAddModalWeek()">+ Add activity</button>';
+        container.innerHTML = html;
+        return;
+      }
+
+      var projects = {};
+      var projectOrder = [];
+      activityOrder.forEach(function(key) {
+        var a = activities[key];
+        if (!projects[a.project]) { projects[a.project] = []; projectOrder.push(a.project); }
+        projects[a.project].push(key);
+      });
+
       projectOrder.forEach(function(proj) {
         html += '<tr><td class="project-label" colspan="9">' + escapeHtml(proj) + '</td></tr>';
         projects[proj].forEach(function(key) {
@@ -1018,8 +1065,14 @@
             var cellIsRunning = isRunning && activeInfo && a.project === activeInfo.project && a.activity === activeInfo.activity && dates[d] === todayStr;
             var dayLocked = isDateLocked(dates[d]);
             var displayVal = secs > 0 ? formatHM(secs) : '';
-            if (cellIsRunning || dayLocked) {
-              html += '<td><span class="week-cell-value' + (secs > 0 ? ' has-value' : '') + (dayLocked ? ' locked' : '') + '">' + displayVal + '</span></td>';
+            if (cellIsRunning) {
+              var elapsed = Math.floor((Date.now() - activeInfo.start_time) / 1000);
+              var runningSecs = secs + elapsed;
+              rowTotal += elapsed;
+              dayTotals[d] += elapsed;
+              html += '<td><span id="week-running-cell" class="week-cell-value has-value running-duration" data-base-secs="' + secs + '">' + formatHM(runningSecs) + '</span></td>';
+            } else if (dayLocked) {
+              html += '<td><span class="week-cell-value' + (secs > 0 ? ' has-value' : '') + ' locked">' + displayVal + '</span></td>';
             } else {
               html += '<td><input class="week-cell-input" value="' + displayVal + '"';
               if (dayData) html += ' data-row="' + dayData.row + '"';
@@ -1182,27 +1235,82 @@
     var cached = localStorage.getItem('scg_timer_projects');
     if (cached) projectsData = JSON.parse(cached);
 
+    document.getElementById('day-label').textContent = dayLabel(viewDate);
+
+    var cachedActive = localStorage.getItem('scg_timer_active');
+    if (cachedActive) {
+      activeInfo = JSON.parse(cachedActive);
+      isRunning = true;
+      timerInterval = setInterval(tickTimer, 1000);
+    }
+
+    var todayDs = fmtDate(viewDate);
+    if (dayCache[todayDs]) {
+      currentEntries = dayCache[todayDs];
+      renderDayEntries(dayCache[todayDs]);
+    }
+
     google.script.run
       .withSuccessHandler(function(data) {
         projectsData = data.projects;
         localStorage.setItem('scg_timer_projects', JSON.stringify(projectsData));
         syncCheckpoint = data.syncCheckpoint || null;
 
-        if (data.active) {
-          isRunning = true;
-          activeInfo = data.active;
-          timerInterval = setInterval(function() { renderDayEntries(currentEntries); }, 1000);
+        if (!userActed) {
+          if (data.active) {
+            activeInfo = data.active;
+            if (!isRunning) {
+              isRunning = true;
+              timerInterval = setInterval(tickTimer, 1000);
+            }
+          } else if (isRunning) {
+            isRunning = false;
+            activeInfo = null;
+            if (timerInterval) clearInterval(timerInterval);
+            timerInterval = null;
+          }
+          cacheActiveTimer();
+        }
+
+        if (Object.keys(projectsData).length === 0) {
+          document.querySelector('.card').innerHTML =
+            '<div class="no-entries" style="padding:2rem 1rem;text-align:center;">' +
+            '<p style="color:#f5a623;font-size:1.1rem;margin-bottom:0.75rem;">No activities configured</p>' +
+            '<p style="color:#888;">Use the SCG Kleer Sync extension to sync your projects from Kleer.</p>' +
+            '</div>';
+          document.addEventListener('visibilitychange', function onVisible() {
+            if (!document.hidden) {
+              document.removeEventListener('visibilitychange', onVisible);
+              location.reload();
+            }
+          });
+          return;
         }
 
         currentEntries = data.entries;
+        dayCache[fmtDate(viewDate)] = data.entries;
+        saveDayCache();
         renderDayEntries(data.entries);
-        document.getElementById('day-label').textContent = dayLabel(viewDate);
         updateTodayButtons();
       })
       .withFailureHandler(function(err) {
         showError('Failed to load: ' + err.message);
       })
       .getInitData();
+
+    document.addEventListener('visibilitychange', function() {
+      if (document.hidden) return;
+      google.script.run
+        .withSuccessHandler(function(cp) {
+          if (cp !== syncCheckpoint) {
+            syncCheckpoint = cp;
+            updateTodayButtons();
+            if (currentView === 'day') loadDay();
+            else loadWeek();
+          }
+        })
+        .getSyncCheckpoint();
+    });
   </script>
 </body>
 </html>
