@@ -2,11 +2,14 @@
 
 A start/stop timer that stores time entries in Google Sheets and syncs them to Kleer for Stockholm Code Group consultants.
 
+**App URL**: [stockholmcode.github.io/scg-timer](https://stockholmcode.github.io/scg-timer)
+
 ## What it does
 
 - Start/stop timer per activity with one click
 - One row per activity per day in a Google Sheet
 - Day view with editable entries, week view with editable grid
+- Optimistic UI — all actions respond instantly, server syncs in background
 - Chrome extension syncs entries to Kleer with 15-minute rounding
 - Synced dates are locked to prevent accidental edits
 - Archived entries keep the sheet fast as data grows
@@ -14,6 +17,11 @@ A start/stop timer that stores time entries in Google Sheets and syncs them to K
 ## Architecture
 
 ```
+┌─────────────────────────────────────────────────────┐
+│  GitHub Pages (stockholmcode.github.io/scg-timer)   │
+│  └── iframe → Apps Script deployment                │
+└─────────────────────────────────────────────────────┘
+
 ┌─────────────────────────────────────────────────────┐
 │  Google Apps Script (web app via clasp)              │
 │                                                     │
@@ -23,7 +31,7 @@ A start/stop timer that stores time entries in Google Sheets and syncs them to K
 │                                                     │
 │  Backend: getInitData, startTimer, stopTimer,        │
 │  getEntries, getWeekEntries, addEntry, updateEntry, │
-│  deleteEntry, getProjectsWithKleerIds,              │
+│  deleteEntry, getProjectsWithKleerIds, syncProjects,│
 │  getAccumulator, updateAccumulator,                 │
 │  getSyncCheckpoint, setSyncCheckpoint,              │
 │  archiveSyncedEntries                               │
@@ -53,30 +61,45 @@ A start/stop timer that stores time entries in Google Sheets and syncs them to K
 │  Auth: API token for Apps Script,                   │
 │        __auth2 cookie for Kleer                     │
 │                                                     │
+│  Features:                                          │
+│  - Floating "SCG Sync" button on Kleer pages        │
+│  - Icon activates only on my.kleer.se               │
+│  - Auto-syncs project list from Kleer on first use  │
+│  - Syncs projects from Kleer on every sync          │
+│                                                     │
 │  Sync flow:                                         │
-│  1. Check sync checkpoint (last synced date)        │
-│  2. Fetch all weeks from checkpoint+1 to yesterday  │
-│  3. Apply 15-min rounding with accumulator          │
-│  4. Create/update events in Kleer                   │
-│  5. Save accumulator + advance checkpoint per week  │
-│  6. Archive synced entries to Log tab               │
+│  1. Sync projects from Kleer layout                 │
+│  2. Check sync checkpoint (last synced date)        │
+│  3. Fetch all weeks from checkpoint+1 to yesterday  │
+│  4. Apply 15-min rounding with accumulator          │
+│  5. Create/update events in Kleer                   │
+│  6. Save accumulator + advance checkpoint per week  │
+│  7. Archive synced entries to Log tab               │
 └─────────────────────────────────────────────────────┘
 ```
 
 ## Timer features
 
 - **Start/stop**: Play/stop toggle per row. One timer at a time.
+- **Start from Add**: "Start" button in Add Activity modal for today.
+- **Optimistic UI**: All actions update instantly. Server syncs in background.
+- **Cached state**: Running timer, entries, and projects cached in localStorage for instant page loads.
 - **Accumulation**: Multiple start/stops on the same activity add up.
-- **Day navigation**: Back/forward arrows + Today button.
-- **Week view**: Editable grid, Mon-Sun. Tab between cells. Row/column totals.
+- **Day navigation**: Back/forward arrows + Today button. Lock icon replaces back arrow on synced dates.
+- **Week view**: Editable grid, Mon-Sun. Row/column totals. Live running timer.
 - **Flexible input**: `1` = 1h, `1.5` = 1:30, `1:30` = 1:30.
-- **Caching**: Projects and day entries cached in localStorage. Cached data shown instantly, refreshed from server in background.
 - **Mobile**: Touch detection with zoom 2.2x and larger targets.
-- **Editable while running**: All entries and navigation work. Only the running entry's time is locked.
 
 ## Kleer sync
 
 The Chrome extension syncs time entries from the Google Sheet to Kleer (my.kleer.se).
+
+### Project sync
+
+Projects and activities are synced from Kleer automatically:
+- First use: if no projects exist, the extension auto-syncs from Kleer's layout
+- Every sync: projects are refreshed from Kleer before syncing time entries
+- The project list in Kleer determines what's available in the timer
 
 ### Rounding
 
@@ -98,6 +121,7 @@ A single date stored in the Settings tab. Everything on or before that date is:
 - Locked in the UI (read-only, no add/edit/delete)
 - Rejected by the backend (`assertNotLocked`)
 - Only advances to the last date with actual sync actions (empty days stay editable)
+- Auto-detected when switching back to the timer tab after syncing
 
 ### Entry archiving
 
@@ -106,19 +130,24 @@ After sync, entries with `date <= checkpoint` are moved from the Entries tab to 
 ## Project structure
 
 ```
-kleer/
+scg-timer/
 ├── README.md
 ├── TODO.md
 ├── setup.md
+├── docs/
+│   └── index.html           # GitHub Pages (iframe to Apps Script)
 ├── apps-script/
-│   ├── .clasp.json         # clasp project config
-│   ├── appsscript.json     # Apps Script manifest
-│   ├── Code.gs             # Backend
-│   └── Index.html          # Frontend (served by Apps Script)
+│   ├── .clasp.json           # clasp project config
+│   ├── appsscript.json       # Apps Script manifest
+│   ├── Code.gs               # Backend
+│   └── Index.html            # Frontend (served by Apps Script)
 └── chrome-extension/
-    ├── manifest.json        # Manifest V3
-    ├── popup.html           # Extension popup UI
-    └── popup.js             # Sync logic
+    ├── manifest.json          # Manifest V3
+    ├── popup.html             # Extension popup UI
+    ├── popup.js               # Sync logic
+    ├── background.js          # Icon activation + popup window
+    ├── content.js             # Floating button on Kleer
+    └── content.css            # Floating button styles
 ```
 
 ## Deployment
@@ -131,14 +160,14 @@ clasp push --force
 clasp deploy -i AKfycbzN_N87CFV22ZVy79iPggXGq9QBbIzIC_kccx4lyFM32WcArW6v0Pzq4mJVvgGmmyfz --description "description"
 ```
 
-Stable URL: `https://script.google.com/macros/s/AKfycbzN_N87CFV22ZVy79iPggXGq9QBbIzIC_kccx4lyFM32WcArW6v0Pzq4mJVvgGmmyfz/exec`
-
 ### Chrome extension
 
-1. Open `chrome://extensions/`
-2. Enable Developer Mode
-3. Click "Load unpacked"
-4. Select the `chrome-extension/` folder
+1. Clone this repo: `git clone git@github.com:stockholmcode/scg-timer.git`
+2. Open `chrome://extensions/`
+3. Enable Developer Mode
+4. Click "Load unpacked"
+5. Select the `chrome-extension/` folder
+6. To update: `git pull` then click reload on the extension
 
 ## Setup
 

@@ -33,9 +33,9 @@
 ### Deployment
 
 - **Apps Script project**: SCG Timer (standalone, via clasp)
-- **Stable URL**: https://script.google.com/macros/s/AKfycbzN_N87CFV22ZVy79iPggXGq9QBbIzIC_kccx4lyFM32WcArW6v0Pzq4mJVvgGmmyfz/exec
+- **Stable URL**: https://stockholmcode.github.io/scg-timer
 - **Deploy command**: `cd apps-script && clasp push --force && clasp deploy -i AKfycbzN_N87CFV22ZVy79iPggXGq9QBbIzIC_kccx4lyFM32WcArW6v0Pzq4mJVvgGmmyfz --description "description"`
-- **Google account**: peter.borg@stockholmcode.se
+- **GitHub repo**: stockholmcode/scg-timer
 
 ## Phase 2: Polish — DONE
 
@@ -53,9 +53,25 @@
 - [x] Archive synced entries to Log tab (append-only, keeps Entries small)
 - [x] Checkpoint only advances to last date with actual sync actions
 
-## Phase 4: Quality
+## Phase 4: Quality — DONE
 
-- [ ] Pretty URL (GitHub Pages redirect or custom subdomain)
-- [ ] Super seed — get full project/activity list for all SCG consultants
+- [x] Pretty URL (GitHub Pages iframe)
+- [x] Project sync from Kleer (replaces hardcoded defaults)
+- [x] Auto-sync projects on first use (0 projects)
+- [x] Optimistic UI (instant feedback for all actions)
+- [x] Cached active timer for instant page loads
+- [x] Lock navigation (prev button shows lock icon for synced dates)
+- [x] Live running timer in week view
+- [x] Start button in Add Activity modal for today
+- [x] Running entries not editable (stop first)
+- [x] Escape closes modals
+- [x] Re-check sync checkpoint on tab focus
+- [x] Floating "SCG Sync" button on Kleer pages
+- [x] Extension icon activates only on my.kleer.se
+- [x] GitHub repo with branch protection
+- [x] Skip trashed sheets in getOrCreateSheet
+
+## Future ideas
+
 - [ ] Cross-device test (start on one device, stop on another)
 - [ ] Testing strategy and test coverage
