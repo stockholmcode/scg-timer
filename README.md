@@ -152,6 +152,15 @@ scg-timer/
     └── content.css            # Floating button styles
 ```
 
+## Prerequisites
+
+- **Google account** (`@stockholmcode.se`) — the app creates a personal Google Sheet for your data
+- **Chrome or Chromium-based browser** (Edge, Brave, etc.) — required for the Kleer sync extension (Manifest V3)
+- **Logged into Google** in the browser — the app authenticates via your Google session
+- **Logged into Kleer** (`my.kleer.se`) in the same browser — the extension uses your Kleer session cookie to sync
+
+The timer web app itself works in any browser, but syncing to Kleer requires the Chrome extension.
+
 ## Deployment
 
 ### Apps Script
