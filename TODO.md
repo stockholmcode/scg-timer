@@ -71,7 +71,6 @@
 - [x] GitHub repo with branch protection
 - [x] Skip trashed sheets in getOrCreateSheet
 
-## Future ideas
+## Status
 
-- [ ] Cross-device test (start on one device, stop on another)
-- [ ] Testing strategy and test coverage
+All planned work is complete.
