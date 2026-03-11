@@ -4,6 +4,8 @@ A start/stop timer that stores time entries in Google Sheets and syncs them to K
 
 **App URL**: [stockholmcode.github.io/scg-timer](https://stockholmcode.github.io/scg-timer)
 
+> The repo is public because GitHub Pages requires it on the free plan. The app data is private — each user's Google Sheet is only accessible to them.
+
 ## What it does
 
 - Start/stop timer per activity with one click
