@@ -5,10 +5,34 @@
   <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
   <title>SCG Timer</title>
   <link rel="icon" type="image/png" href="https://avatars.githubusercontent.com/u/1243028?s=32">
+  <style>
+    * { margin: 0; padding: 0; }
+    html, body { height: 100%; overflow: hidden; background: #1a1a2e; }
+    iframe { width: 100%; height: 100%; border: none; }
+    .fallback { display: none; color: #ccc; font-family: -apple-system, sans-serif; text-align: center; padding: 4rem 1rem; }
+    .fallback a { color: #f5a623; text-decoration: none; font-size: 1.2rem; }
+  </style>
+</head>
+<body>
+  <iframe id="app" src="https://script.google.com/macros/s/AKfycbxe4sHl32QuAyCJzrJxFg-ITYkHjtfpgtAFS108EoZHIvH99naGolWVx0K0QZSmQZsk/exec"></iframe>
+  <div id="fallback" class="fallback">
+    <p style="margin-bottom:1rem;">Could not load SCG Timer &mdash; you may need to sign in with your Stockholm Code account.</p>
+    <a id="signin-link" href="#">Sign in &rarr;</a>
+  </div>
   <script>
     var appUrl = 'https://script.google.com/macros/s/AKfycbxe4sHl32QuAyCJzrJxFg-ITYkHjtfpgtAFS108EoZHIvH99naGolWVx0K0QZSmQZsk/exec';
-    window.location.href = 'https://accounts.google.com/AccountChooser?continue=' + encodeURIComponent(appUrl);
+    var loaded = false;
+    document.getElementById('signin-link').href =
+      'https://accounts.google.com/AccountChooser?continue=' + encodeURIComponent(appUrl);
+    window.addEventListener('message', function(e) {
+      if (e.data === 'scg-timer-loaded') loaded = true;
+    });
+    setTimeout(function() {
+      if (!loaded) {
+        document.getElementById('app').style.display = 'none';
+        document.getElementById('fallback').style.display = 'block';
+      }
+    }, 4000);
   </script>
-</head>
-<body></body>
+</body>
 </html>
